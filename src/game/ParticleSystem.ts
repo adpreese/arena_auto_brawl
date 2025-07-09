@@ -1,5 +1,5 @@
 // Particle System for Visual Effects
-import { Particle, Vec2 } from './types';
+import { Particle, Vec2, AttackEffect } from './types';
 import { GAME_CONFIG } from './config';
 import { generateUniqueId } from './utils';
 
@@ -43,7 +43,7 @@ export class ParticleSystem {
       };
       particle.life = 0;
       particle.maxLife = 1000; // 1 second
-      particle.size = 4 + Math.random() * 8;
+      particle.size = 0;
       particle.color = '255, 221, 51';
       particle.type = 'hit';
       
@@ -51,6 +51,104 @@ export class ParticleSystem {
     }
   }
   
+  spawnAttackEffect(position: Vec2, attackEffect: AttackEffect): void {
+    const particleCount = this.getParticleCountForAttack(attackEffect);
+    
+    for (let i = 0; i < particleCount; i++) {
+      const particle = this.getParticleFromPool();
+      if (!particle) continue;
+      
+      this.configureAttackParticle(particle, position, attackEffect, i, particleCount);
+      this.particles.set(particle.id, particle);
+    }
+  }
+
+  private getParticleCountForAttack(attackEffect: AttackEffect): number {
+    switch (attackEffect.particleEffect) {
+      case 'explosion': return 12;
+      case 'spark': return 8;
+      case 'crystals': return 6;
+      case 'cloud': return 20;
+      case 'slash': return 4;
+      default: return 8;
+    }
+  }
+
+  private configureAttackParticle(particle: Particle, position: Vec2, attackEffect: AttackEffect, index: number, total: number): void {
+    particle.position = { ...position };
+    particle.life = 0;
+    particle.color = attackEffect.particleColor;
+    particle.type = 'hit';
+
+    switch (attackEffect.particleEffect) {
+      case 'explosion':
+        const explosionAngle = (index / total) * Math.PI * 2;
+        const explosionSpeed = 60 + Math.random() * 40;
+        particle.velocity = {
+          x: Math.cos(explosionAngle) * explosionSpeed,
+          y: Math.sin(explosionAngle) * explosionSpeed
+        };
+        particle.color = '120, 255, 255'
+        particle.maxLife = 800;
+        particle.size = 8 + Math.random() * 6;
+        break;
+
+      case 'spark':
+        const sparkAngle = (index / total) * Math.PI * 2;
+        const sparkSpeed = 80 + Math.random() * 50;
+        particle.velocity = {
+          x: Math.cos(sparkAngle) * sparkSpeed,
+          y: Math.sin(sparkAngle) * sparkSpeed
+        };
+        particle.maxLife = 600;
+        particle.size = 3 + Math.random() * 4;
+        particle.color = '220, 220, 55'
+        break;
+
+      case 'crystals':
+        const crystalAngle = (index / total) * Math.PI * 2;
+        const crystalSpeed = 40 + Math.random() * 30;
+        particle.velocity = {
+          x: Math.cos(crystalAngle) * crystalSpeed,
+          y: Math.sin(crystalAngle) * crystalSpeed
+        };
+        particle.maxLife = 1200;
+        particle.size = 6 + Math.random() * 8;
+        particle.color = '220, 55, 55'
+        break;
+
+      case 'cloud':
+        const cloudAngle = Math.random() * Math.PI * 2;
+        const cloudSpeed = 20 + Math.random() * 30;
+        particle.velocity = {
+          x: Math.cos(cloudAngle) * cloudSpeed,
+          y: Math.sin(cloudAngle) * cloudSpeed
+        };
+        particle.maxLife = 2000;
+        particle.size = 4 + Math.random() * 6;
+        particle.color = '55, 55, 220'
+        break;
+
+      case 'slash':
+        const slashAngle = (index / total) * Math.PI * 0.5 - Math.PI * 0.25; // 90 degree spread
+        const slashSpeed = 70 + Math.random() * 40;
+        particle.velocity = {
+          x: Math.cos(slashAngle) * slashSpeed,
+          y: Math.sin(slashAngle) * slashSpeed
+        };
+        particle.maxLife = 500;
+        particle.size = 5 + Math.random() * 5;
+        particle.color = '55, 220, 55'
+        break;
+
+      default:
+        particle.velocity = { x: 0, y: 0 };
+        particle.maxLife = 1000;
+        particle.size = 5;
+        particle.color = '20, 20, 20'
+    }
+  }
+
   spawnDeathEffect(position: Vec2): void {
     // Spawn 16 particles for death burst
     for (let i = 0; i < 16; i++) {
@@ -68,10 +166,27 @@ export class ParticleSystem {
       particle.life = 0;
       particle.maxLife = 1500; // 1.5 seconds
       particle.size = 6 + Math.random() * 10;
-      particle.color = 'rgb(var(--particle-death))';
+      particle.color = '220, 38, 38'; // Red color for death particles
       particle.type = 'death';
       
       this.particles.set(particle.id, particle);
+    }
+    
+    // Add a death icon that floats upward
+    const iconParticle = this.getParticleFromPool();
+    if (iconParticle) {
+      iconParticle.position = { ...position };
+      iconParticle.velocity = {
+        x: 0,
+        y: -30 // Float upward slowly
+      };
+      iconParticle.life = 0;
+      iconParticle.maxLife = 2000; // 2 seconds
+      iconParticle.size = 24; // Larger for the icon
+      iconParticle.color = '255, 255, 255'; // White for the skull
+      iconParticle.type = 'death_icon';
+      
+      this.particles.set(iconParticle.id, iconParticle);
     }
   }
   
@@ -86,9 +201,16 @@ export class ParticleSystem {
       particle.position.x += particle.velocity.x * dt;
       particle.position.y += particle.velocity.y * dt;
       
-      // Apply friction
-      particle.velocity.x *= 0.95;
-      particle.velocity.y *= 0.95;
+      // Apply friction (different for death icon)
+      if (particle.type === 'death_icon') {
+        // Less friction for death icon, it should float smoothly upward
+        particle.velocity.x *= 0.98;
+        particle.velocity.y *= 0.98;
+      } else {
+        // Standard friction for other particles
+        particle.velocity.x *= 0.95;
+        particle.velocity.y *= 0.95;
+      }
       
       // Mark for removal if expired
       if (particle.life >= particle.maxLife) {
@@ -112,29 +234,47 @@ export class ParticleSystem {
     for (const particle of this.particles.values()) {
       const lifeRatio = 1 - (particle.life / particle.maxLife);
       const alpha = lifeRatio;
-      const size = particle.size * (0.5 + lifeRatio * 0.5);
       
-      // Set particle color with alpha
-      const colorMatch = particle.color.match(/rgb\(var\(([^)]+)\)\)/);
-      if (colorMatch) {
-        ctx.fillStyle = `rgb(var(${colorMatch[1]}) / ${alpha})`;
+      if (particle.type === 'death_icon') {
+        // // Draw death icon (skull emoji)
+        // ctx.save();
+        // ctx.globalAlpha = alpha;
+        // ctx.font = `${particle.size}px Arial`;
+        // ctx.textAlign = 'center';
+        // ctx.textBaseline = 'middle';
+        
+        // // Add shadow/outline for better visibility
+        // ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        // ctx.lineWidth = 2;
+        // ctx.strokeText('💀', particle.position.x, particle.position.y);
+        
+        // // Draw the skull emoji
+        // ctx.fillStyle = `rgba(${particle.color}, ${alpha})`;
+        // ctx.fillText('💀', particle.position.x, particle.position.y);
+        // ctx.restore();
       } else {
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-      }
-      
-      // Draw particle
-      ctx.beginPath();
-      ctx.arc(particle.position.x, particle.position.y, size, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Add glow effect for certain particles
-      if (particle.type === 'death') {
-        ctx.shadowColor = particle.color;
-        ctx.shadowBlur = size * 2;
+        // Regular particle rendering
+        const size = particle.size * (0.5 + lifeRatio * 0.5);
+        
+        // Set particle color with alpha
+        ctx.fillStyle = `rgba(${particle.color}, ${alpha})`;
+        
+        // Draw particle
         ctx.beginPath();
-        ctx.arc(particle.position.x, particle.position.y, size * 0.5, 0, Math.PI * 2);
+        ctx.arc(particle.position.x, particle.position.y, size, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        
+        // Add glow effect for death particles
+        if (particle.type === 'death') {
+          ctx.save();
+          ctx.shadowColor = `rgb(${particle.color})`;
+          ctx.shadowBlur = size * 2;
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.beginPath();
+          ctx.arc(particle.position.x, particle.position.y, size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
     }
     

@@ -1,0 +1,44 @@
+{
+  "Fire": {
+    "name": "Fire",
+    "strongAgainst": ["Ice"],
+    "weakAgainst": ["Water"],
+    "icon": "🔥",
+    "color": "#FF4500"
+  },
+  "Water": {
+    "name": "Water",
+    "strongAgainst": ["Fire"],
+    "weakAgainst": ["Electric"],
+    "icon": "💧",
+    "color": "#0066CC"
+  },
+  "Electric": {
+    "name": "Electric",
+    "strongAgainst": ["Water"],
+    "weakAgainst": ["Earth"],
+    "icon": "⚡",
+    "color": "#FFD700"
+  },
+  "Earth": {
+    "name": "Earth",
+    "strongAgainst": ["Electric"],
+    "weakAgainst": ["Air"],
+    "icon": "🌍",
+    "color": "#8B4513"
+  },
+  "Air": {
+    "name": "Air",
+    "strongAgainst": ["Earth"],
+    "weakAgainst": ["Ice"],
+    "icon": "💨",
+    "color": "#87CEEB"
+  },
+  "Ice": {
+    "name": "Ice",
+    "strongAgainst": ["Air"],
+    "weakAgainst": ["Fire"],
+    "icon": "❄️",
+    "color": "#B0E0E6"
+  }
+}

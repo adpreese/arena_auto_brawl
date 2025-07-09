@@ -1,6 +1,7 @@
 // Arena Brawl Utility Functions
-import { Vec2, Character } from './types';
+import { Vec2, Character, LevelUpOption, PlanetaryHouse, AttackEffect, Stats, Element } from './types';
 import { GAME_CONFIG } from './config';
+import { elementRegistry } from './ElementRegistry';
 
 export function randomStat(): number {
   return Math.floor(Math.random() * 6); // 0-5 inclusive
@@ -67,11 +68,20 @@ export function findNearestLivingEnemy(character: Character, allCharacters: Char
 }
 
 export function isWithinAttackRange(attacker: Character, target: Character): boolean {
-  return distance(attacker.position, target.position) <= GAME_CONFIG.ATTACK_RANGE_PX;
+  return distance(attacker.position, target.position) <= attacker.equippedAttack.aoeSize;
 }
 
 export function calculateDamage(attacker: Character, defender: Character): number {
-  const rawDamage = attacker.stats.attack - defender.stats.defense;
+  // New damage formula: base × (1 + attackPower/10) × elementalModifier - defense
+  const baseDamage = attacker.equippedAttack.baseDamage;
+  const attackPowerMultiplier = 1 + (attacker.stats.attackPower / 10);
+  const elementalModifier = elementRegistry.calculateElementalModifier(
+    attacker.equippedAttack.element,
+    attacker.stats.element,
+    defender.stats.element
+  );
+  
+  const rawDamage = Math.floor(baseDamage * attackPowerMultiplier * elementalModifier) - defender.stats.defense;
   return Math.max(1, rawDamage); // Minimum 1 damage
 }
 
@@ -96,4 +106,347 @@ export function resolveCollision(char1: Character, char2: Character): void {
     char2.position.x += dir.x * moveAmount;
     char2.position.y += dir.y * moveAmount;
   }
+}
+
+export function generateLevelUpOptions(): LevelUpOption[] {
+  const options: LevelUpOption[] = [
+    {
+      id: 'berserker',
+      name: 'Berserker',
+      description: 'Unleash your fury',
+      statBonus: {
+        hp: Math.floor(Math.random() * 6), // 0-5
+        defense: Math.floor(Math.random() * 4), // 0-3
+        attackPower: Math.floor(Math.random() * 4), // 0-3
+        speed: Math.floor(Math.random() * 4) // 0-3
+      }
+    },
+    {
+      id: 'guardian',
+      name: 'Guardian',
+      description: 'Defend and endure',
+      statBonus: {
+        hp: Math.floor(Math.random() * 6), // 0-5
+        defense: Math.floor(Math.random() * 4), // 0-3
+        attackPower: Math.floor(Math.random() * 4), // 0-3
+        speed: Math.floor(Math.random() * 4) // 0-3
+      }
+    },
+    {
+      id: 'survivor',
+      name: 'Survivor',
+      description: 'Built to last',
+      statBonus: {
+        hp: Math.floor(Math.random() * 6), // 0-5
+        defense: Math.floor(Math.random() * 4), // 0-3
+        attackPower: Math.floor(Math.random() * 4), // 0-3
+        speed: Math.floor(Math.random() * 4) // 0-3
+      }
+    }
+  ];
+  
+  return options;
+}
+
+export function applyLevelUpOption(character: Character, option: LevelUpOption): Character {
+  const updatedCharacter = { ...character };
+  
+  // Initialize base stats if not present
+  if (!updatedCharacter.baseStats) {
+    updatedCharacter.baseStats = { ...character.stats };
+  }
+  
+  // Initialize level if not present
+  if (!updatedCharacter.level) {
+    updatedCharacter.level = 1;
+  }
+  
+  // Apply stat bonuses
+  updatedCharacter.stats = {
+    ...updatedCharacter.stats,
+    hp: updatedCharacter.stats.hp + option.statBonus.hp,
+    defense: updatedCharacter.stats.defense + option.statBonus.defense,
+    attackPower: updatedCharacter.stats.attackPower + option.statBonus.attackPower,
+    speed: updatedCharacter.stats.speed + option.statBonus.speed
+  };
+  
+  // Level up
+  updatedCharacter.level++;
+  
+  // Restore to full HP
+  updatedCharacter.currentHP = updatedCharacter.stats.hp;
+  
+  return updatedCharacter;
+}
+
+export function randomPlanetaryHouse(): PlanetaryHouse {
+  const houses: PlanetaryHouse[] = ['Jupiter', 'Saturn', 'Mars', 'Neptune', 'Mercury', 'Venus', 'Sol'];
+  return houses[Math.floor(Math.random() * houses.length)];
+}
+
+export function getPlanetaryHouseSymbol(house: PlanetaryHouse): string {
+  const symbols: Record<PlanetaryHouse, string> = {
+    Jupiter: '♃',
+    Saturn: '♄', 
+    Mars: '♂',
+    Neptune: '♆',
+    Mercury: '☿',
+    Venus: '♀',
+    Sol: '☉'
+  };
+  return symbols[house];
+}
+
+export function getPlanetaryHouseColor(house: PlanetaryHouse): string {
+  const colors: Record<PlanetaryHouse, string> = {
+    Jupiter: '#FFA500', // Orange
+    Saturn: '#DAA520', // Gold
+    Mars: '#CD5C5C', // Red
+    Neptune: '#4682B4', // Blue
+    Mercury: '#C0C0C0', // Silver
+    Venus: '#FFB6C1', // Pink
+    Sol: '#FFD700' // Yellow
+  };
+  return colors[house];
+}
+
+export function getAttackEffects(): AttackEffect[] {
+  return [
+    {
+      id: 'fireball',
+      name: 'Fireball',
+      icon: '🔥',
+      baseDamage: 3,
+      cooldown: 667, // ~1.5 attacks per second
+      element: 'Fire',
+      aoeShape: 'circle',
+      aoeSize: 60,
+      particleColor: '255, 69, 0',
+      particleEffect: 'explosion'
+    },
+    {
+      id: 'lightning_bolt',
+      name: 'Lightning Bolt',
+      icon: '⚡',
+      baseDamage: 2,
+      cooldown: 500, // 2 attacks per second
+      element: 'Electric',
+      aoeShape: 'line',
+      aoeSize: 120, // length
+      aoeWidth: 20, // width
+      particleColor: '255, 255, 0',
+      particleEffect: 'spark'
+    },
+    {
+      id: 'ice_shard',
+      name: 'Ice Shard',
+      icon: '❄️',
+      baseDamage: 4,
+      cooldown: 833, // ~1.2 attacks per second
+      element: 'Ice',
+      aoeShape: 'cone',
+      aoeSize: 80, // range
+      aoeAngle: 45, // 45 degree cone
+      particleColor: '173, 216, 230',
+      particleEffect: 'crystals'
+    },
+    {
+      id: 'water_wave',
+      name: 'Water Wave',
+      icon: '💧',
+      baseDamage: 2,
+      cooldown: 1250, // 0.8 attacks per second
+      element: 'Water',
+      aoeShape: 'arc',
+      aoeSize: 90,
+      aoeAngle: 120, // 120 degree arc
+      particleColor: '50, 205, 50',
+      particleEffect: 'splash'
+    },
+    {
+      id: 'earth_spikes',
+      name: 'Earth Spikes',
+      icon: '🌍',
+      baseDamage: 3,
+      cooldown: 600, // ~1.7 attacks per second
+      element: 'Earth',
+      aoeShape: 'rectangle',
+      aoeSize: 70, // length
+      aoeWidth: 30, // width
+      particleColor: '139, 69, 19',
+      particleEffect: 'crystals'
+    },
+    {
+      id: 'air_slash',
+      name: 'Air Slash',
+      icon: '💨',
+      baseDamage: 2,
+      cooldown: 400, // 2.5 attacks per second
+      element: 'Air',
+      aoeShape: 'line',
+      aoeSize: 100,
+      aoeWidth: 15,
+      particleColor: '135, 206, 235',
+      particleEffect: 'wind'
+    }
+  ];
+}
+
+export function randomAttackEffect(): AttackEffect {
+  const attacks = getAttackEffects();
+  return attacks[Math.floor(Math.random() * attacks.length)];
+}
+
+// Helper function to create random stats with the new system
+export function createRandomStats(): Stats {
+  return {
+    hp: 2 + Math.floor(Math.random() * 5), // 15-25
+    defense: 1 + Math.floor(Math.random() * 4), // 1-5
+    attackPower: 3 + Math.floor(Math.random() * 7), // 3-10
+    speed: 50 + Math.floor(Math.random() * 30), // 50-80
+    element: elementRegistry.getRandomElement()
+  };
+}
+
+// AOE Calculation Functions
+export function isInCircleAOE(targetPos: Vec2, attackerPos: Vec2, radius: number): boolean {
+  return distance(targetPos, attackerPos) <= radius;
+}
+
+export function isInLineAOE(targetPos: Vec2, attackerPos: Vec2, targetDirection: Vec2, length: number, width: number): boolean {
+  const toTarget = {
+    x: targetPos.x - attackerPos.x,
+    y: targetPos.y - attackerPos.y
+  };
+  
+  const normalizedDirection = normalize(targetDirection);
+  
+  // Project target position onto attack direction
+  const projectionLength = toTarget.x * normalizedDirection.x + toTarget.y * normalizedDirection.y;
+  
+  // Check if target is within line length
+  if (projectionLength < 0 || projectionLength > length) {
+    return false;
+  }
+  
+  // Calculate perpendicular distance
+  const perpendicularDistance = Math.abs(
+    toTarget.x * (-normalizedDirection.y) + toTarget.y * normalizedDirection.x
+  );
+  
+  return perpendicularDistance <= width / 2;
+}
+
+export function isInConeAOE(targetPos: Vec2, attackerPos: Vec2, direction: Vec2, range: number, angleInDegrees: number): boolean {
+  const toTarget = {
+    x: targetPos.x - attackerPos.x,
+    y: targetPos.y - attackerPos.y
+  };
+  
+  const targetDistance = Math.sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y);
+  
+  // Check if target is within range
+  if (targetDistance > range) {
+    return false;
+  }
+  
+  const normalizedDirection = normalize(direction);
+  const normalizedToTarget = normalize(toTarget);
+  
+  // Calculate angle between direction and target
+  const dotProduct = normalizedDirection.x * normalizedToTarget.x + normalizedDirection.y * normalizedToTarget.y;
+  const angleToTarget = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+  const angleToTargetDegrees = (angleToTarget * 180) / Math.PI;
+  
+  return angleToTargetDegrees <= angleInDegrees / 2;
+}
+
+export function isInRectangleAOE(targetPos: Vec2, attackerPos: Vec2, direction: Vec2, length: number, width: number): boolean {
+  return isInLineAOE(targetPos, attackerPos, direction, length, width);
+}
+
+// ARC AOE calculation - similar to cone but with hollow center
+export function isInArcAOE(targetPos: Vec2, attackerPos: Vec2, direction: Vec2, range: number, angleInDegrees: number, innerRadius: number = 20): boolean {
+  const toTarget = {
+    x: targetPos.x - attackerPos.x,
+    y: targetPos.y - attackerPos.y
+  };
+  
+  const targetDistance = Math.sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y);
+  
+  // Check if target is within range but outside inner radius
+  if (targetDistance > range || targetDistance < innerRadius) {
+    return false;
+  }
+  
+  const normalizedDirection = normalize(direction);
+  const normalizedToTarget = normalize(toTarget);
+  
+  // Calculate angle between direction and target
+  const dotProduct = normalizedDirection.x * normalizedToTarget.x + normalizedDirection.y * normalizedToTarget.y;
+  const angleToTarget = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+  const angleToTargetDegrees = (angleToTarget * 180) / Math.PI;
+  
+  return angleToTargetDegrees <= angleInDegrees / 2;
+}
+
+export function isInAttackAOE(targetPos: Vec2, attackerPos: Vec2, attackDirection: Vec2, attack: AttackEffect): boolean {
+  switch (attack.aoeShape) {
+    case 'circle':
+      return isInCircleAOE(targetPos, attackerPos, attack.aoeSize);
+    case 'line':
+      return isInLineAOE(targetPos, attackerPos, attackDirection, attack.aoeSize, attack.aoeWidth || 20);
+    case 'cone':
+      return isInConeAOE(targetPos, attackerPos, attackDirection, attack.aoeSize, attack.aoeAngle || 45);
+    case 'rectangle':
+      return isInRectangleAOE(targetPos, attackerPos, attackDirection, attack.aoeSize, attack.aoeWidth || 30);
+    case 'arc':
+      return isInArcAOE(targetPos, attackerPos, attackDirection, attack.aoeSize, attack.aoeAngle || 60);
+    default:
+      return false;
+  }
+}
+
+export function upgradeEnemyCharacter(character: Character): Character {
+  const upgradedCharacter = { ...character };
+  
+  // Initialize base stats if not present
+  if (!upgradedCharacter.baseStats) {
+    upgradedCharacter.baseStats = { ...character.stats };
+  }
+  
+  // Initialize level if not present
+  if (!upgradedCharacter.level) {
+    upgradedCharacter.level = 1;
+  }
+  
+  // Generate random stat upgrades (same ranges as player)
+  const statUpgrades = {
+    hp: Math.floor(Math.random() * 6), // 0-5
+    defense: Math.floor(Math.random() * 4), // 0-3
+    attackPower: Math.floor(Math.random() * 4), // 0-3
+    speed: Math.floor(Math.random() * 4) // 0-3
+  };
+  
+  // Apply random upgrades
+  upgradedCharacter.stats = {
+    ...upgradedCharacter.stats,
+    hp: upgradedCharacter.stats.hp + statUpgrades.hp,
+    defense: upgradedCharacter.stats.defense + statUpgrades.defense,
+    attackPower: upgradedCharacter.stats.attackPower + statUpgrades.attackPower,
+    speed: upgradedCharacter.stats.speed + statUpgrades.speed
+  };
+  
+  // Level up
+  upgradedCharacter.level++;
+  
+  // Restore to full HP
+  upgradedCharacter.currentHP = upgradedCharacter.stats.hp;
+  
+  // Reset state for new round
+  upgradedCharacter.isDead = false;
+  upgradedCharacter.currentTargetId = null;
+  upgradedCharacter.lastAttackTime = 0;
+  
+  return upgradedCharacter;
 }

@@ -75,6 +75,7 @@ export default {
 					purple: 'rgb(var(--neon-purple))',
 					cyan: 'rgb(var(--neon-cyan))'
 				},
+				gold:'rgb(var(--gold))',
 				particle: {
 					hit: 'rgb(var(--particle-hit))',
 					death: 'rgb(var(--particle-death))'

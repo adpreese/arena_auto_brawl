@@ -1,7 +1,7 @@
 // Character Management System
 import { Character, Stats, Vec2 } from './types';
 import { GAME_CONFIG } from './config';
-import { randomStat, randomEmoji, randomColor, generateUniqueId, getRandomPosition } from './utils';
+import { randomStat, randomEmoji, randomColor, generateUniqueId, getRandomPosition, randomPlanetaryHouse, randomAttackEffect, createRandomStats } from './utils';
 
 export class CharacterManager {
   private characters: Map<string, Character> = new Map();
@@ -12,17 +12,12 @@ export class CharacterManager {
     const candidates: Character[] = [];
     
     for (let i = 0; i < count; i++) {
-      const stats: Stats = {
-        attack: randomStat(),
-        defense: randomStat(),
-        special: randomStat(),
-        hp: GAME_CONFIG.MAX_HP
-      };
+      const stats = createRandomStats();
       
       const candidate: Character = {
         id: generateUniqueId(),
         stats,
-        currentHP: GAME_CONFIG.MAX_HP,
+        currentHP: stats.hp,
         position: { x: 0, y: 0 },
         velocity: { x: 0, y: 0 },
         currentTargetId: null,
@@ -32,7 +27,10 @@ export class CharacterManager {
         isPlayer: false,
         isDead: false,
         lastDirectionChange: 0,
-        randomDirection: Math.random() * Math.PI * 2
+        randomDirection: Math.random() * Math.PI * 2,
+        planetaryHouse: randomPlanetaryHouse(),
+        equippedAttack: randomAttackEffect(),
+        inventory: []
       };
       
       candidates.push(candidate);
@@ -41,52 +39,83 @@ export class CharacterManager {
     return candidates;
   }
   
-  spawnCombatants(playerCharacter: Character): void {
+  spawnCombatants(playerCharacter: Character, existingEnemies?: Character[]): void {
     this.characters.clear();
     
     // Set player as player character
     playerCharacter.isPlayer = true;
+    playerCharacter.isDead = false;
     playerCharacter.position = getRandomPosition(GAME_CONFIG.ARENA_SIZE);
     this.characters.set(playerCharacter.id, playerCharacter);
     
-    // Generate NPCs
     const usedPositions: Vec2[] = [playerCharacter.position];
     
-    for (let i = 1; i < GAME_CONFIG.TOTAL_COMBATANTS; i++) {
-      const stats: Stats = {
-        attack: randomStat(),
-        defense: randomStat(),
-        special: randomStat(),
-        hp: GAME_CONFIG.MAX_HP
-      };
-      
-      let position: Vec2;
-      let attempts = 0;
-      do {
-        position = getRandomPosition(GAME_CONFIG.ARENA_SIZE);
-        attempts++;
-      } while (this.isPositionTooClose(position, usedPositions) && attempts < 50);
-      
-      usedPositions.push(position);
-      
-      const npc: Character = {
-        id: generateUniqueId(),
-        stats,
-        currentHP: GAME_CONFIG.MAX_HP,
-        position,
-        velocity: { x: 0, y: 0 },
-        currentTargetId: null,
-        lastAttackTime: 0,
-        emoji: randomEmoji(),
-        color: randomColor(),
-        isPlayer: false,
-        isDead: false,
-        lastDirectionChange: 0,
-        randomDirection: Math.random() * Math.PI * 2
-      };
-      
-      this.characters.set(npc.id, npc);
+    if (existingEnemies && existingEnemies.length > 0) {
+      // Use existing enemies but reset their positions and state
+      for (const enemy of existingEnemies) {
+        let position: Vec2;
+        let attempts = 0;
+        do {
+          position = getRandomPosition(GAME_CONFIG.ARENA_SIZE);
+          attempts++;
+        } while (this.isPositionTooClose(position, usedPositions) && attempts < 50);
+        
+        usedPositions.push(position);
+        
+        // Reset enemy for new round
+        enemy.position = position;
+        enemy.velocity = { x: 0, y: 0 };
+        enemy.currentTargetId = null;
+        enemy.lastAttackTime = 0;
+        enemy.isDead = false;
+        enemy.currentHP = enemy.stats.hp; // Use updated HP from stats
+        enemy.lastDirectionChange = 0;
+        enemy.randomDirection = Math.random() * Math.PI * 2;
+        
+        this.characters.set(enemy.id, enemy);
+      }
+    } else {
+      // Generate new NPCs (first round)
+      for (let i = 1; i < GAME_CONFIG.TOTAL_COMBATANTS; i++) {
+        const stats = createRandomStats();
+        
+        let position: Vec2;
+        let attempts = 0;
+        do {
+          position = getRandomPosition(GAME_CONFIG.ARENA_SIZE);
+          attempts++;
+        } while (this.isPositionTooClose(position, usedPositions) && attempts < 50);
+        
+        usedPositions.push(position);
+        
+        const npc: Character = {
+          id: generateUniqueId(),
+          stats,
+          currentHP: stats.hp,
+          position,
+          velocity: { x: 0, y: 0 },
+          currentTargetId: null,
+          lastAttackTime: 0,
+          emoji: randomEmoji(),
+          color: randomColor(),
+          isPlayer: false,
+          isDead: false,
+          lastDirectionChange: 0,
+          randomDirection: Math.random() * Math.PI * 2,
+          level: 1,
+          baseStats: { ...stats },
+          planetaryHouse: randomPlanetaryHouse(),
+          equippedAttack: randomAttackEffect(),
+          inventory: []
+        };
+        
+        this.characters.set(npc.id, npc);
+      }
     }
+  }
+  
+  getEnemyCharacters(): Character[] {
+    return Array.from(this.characters.values()).filter(c => !c.isPlayer);
   }
   
   private isPositionTooClose(position: Vec2, existingPositions: Vec2[]): boolean {
@@ -100,6 +129,10 @@ export class CharacterManager {
 
   addDeadCharacterByID(characterId) {
     this.deathTracker.push(characterId);
+  }
+
+  clearDeathTracker() {
+    this.deathTracker = [];
   }
   
   getAllCharacters(): Character[] {
@@ -118,7 +151,7 @@ export class CharacterManager {
     return Array.from(this.characters.values()).find(c => c.isPlayer);
   }
   
-  takeDamage(characterId: string, damage: number): void {
+  takeDamage(characterId: string, damage: number, attackerId?: string): void {
     const character = this.characters.get(characterId);
     if (!character || character.isDead) return;
     
@@ -133,6 +166,21 @@ export class CharacterManager {
         type: 'character_died',
         data: { character }
       });
+      
+      // If killed by player, emit player kill event
+      if (attackerId) {
+        const attacker = this.characters.get(attackerId);
+        if (attacker && attacker.isPlayer) {
+          this.emitEvent({
+            type: 'player_kill',
+            data: { 
+              killer: attacker,
+              victim: character,
+              scoreAwarded: 3
+            }
+          });
+        }
+      }
     }
   }
   

@@ -1,7 +1,7 @@
 // Combat System for Battle Logic
-import { Character } from './types';
+import { Character, Vec2 } from './types';
 import { GAME_CONFIG } from './config';
-import { isWithinAttackRange, calculateDamage } from './utils';
+import { isInAttackAOE, normalize, calculateDamage } from './utils';
 import { CharacterManager } from './CharacterManager';
 
 export class CombatSystem {
@@ -22,37 +22,71 @@ export class CombatSystem {
       const target = this.characterManager.getCharacterById(attacker.currentTargetId);
       if (!target || target.isDead) continue;
       
-      // Check if enough time has passed since last attack
-      if (currentTime - attacker.lastAttackTime < GAME_CONFIG.ATTACK_COOLDOWN_MS) continue;
+      // Check if enough time has passed since last attack (using cooldown)
+      const attackCooldown = attacker.equippedAttack.cooldown;
+      if (currentTime - attacker.lastAttackTime < attackCooldown) continue;
       
-      // Check if target is within attack range
-      if (!isWithinAttackRange(attacker, target)) continue;
+      // Calculate attack direction towards target
+      const attackDirection = {
+        x: target.position.x - attacker.position.x,
+        y: target.position.y - attacker.position.y
+      };
       
-      // Perform attack
-      this.performAttack(attacker, target, currentTime);
+      // Check if target is within AOE range
+      if (isInAttackAOE(target.position, attacker.position, attackDirection, attacker.equippedAttack)) {
+        // Perform AOE attack (hits all characters in AOE)
+        this.performAOEAttack(attacker, attackDirection, characters, currentTime);
+      }
     }
   }
   
-  private performAttack(attacker: Character, target: Character, currentTime: number): void {
-    const damage = calculateDamage(attacker, target);
+  private performAOEAttack(attacker: Character, attackDirection: Vec2, allCharacters: Character[], currentTime: number): void {
+    const hitTargets: Character[] = [];
     
-    // Apply damage
-    this.characterManager.takeDamage(target.id, damage);
+    // Find all characters in AOE
+    for (const character of allCharacters) {
+      if (character.id === attacker.id || character.isDead) continue;
+      
+      if (isInAttackAOE(character.position, attacker.position, attackDirection, attacker.equippedAttack)) {
+        hitTargets.push(character);
+      }
+    }
     
     // Update attacker's last attack time
     attacker.lastAttackTime = currentTime;
     
-    // Emit combat hit event
+    // Apply damage to all hit targets
+    for (const target of hitTargets) {
+      const damage = calculateDamage(attacker, target); // Use new damage calculation
+      this.characterManager.takeDamage(target.id, damage, attacker.id);
+      
+      // Emit combat hit event for each target
+      this.emitEvent({
+        type: 'combat_hit',
+        data: {
+          attacker,
+          target,
+          damage,
+          position: { ...target.position },
+          attackEffect: attacker.equippedAttack
+        }
+      });
+    }
+    
+    // Emit AOE attack event for visual effects
     this.emitEvent({
-      type: 'combat_hit',
+      type: 'aoe_attack',
       data: {
         attacker,
-        target,
-        damage,
-        position: { ...target.position }
+        position: { ...attacker.position },
+        direction: normalize(attackDirection),
+        attackEffect: attacker.equippedAttack,
+        hitTargets
       }
     });
   }
+
+  // Removed calculateAttackDamage method as it's now in utils with elemental calculations
   
   checkForGameEnd(): boolean {
     const livingCount = this.characterManager.getLivingCount();
