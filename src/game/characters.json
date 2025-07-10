@@ -1,0 +1,167 @@
+{
+  "emojis": [
+    "🦁", "🐯", "🐸", "🐱", "🐺", "🐻", "🦊", "🐨", "🐼", "🐹",
+    "🐰", "🦝", "🐭", "🐷", "🐮", "🐗", "🐠", "🐙", "🐳", "🦈",
+    "🐉", "🐲", "🦄", "🦍", "🦀", "🐞", "🐋", "🦅", "🐧", "🦜"
+  ],
+  "colors": [
+    {
+      "name": "Neon Red",
+      "value": "rgb(var(--neon-red))",
+      "hex": "#FF073A"
+    },
+    {
+      "name": "Neon Blue", 
+      "value": "rgb(var(--neon-blue))",
+      "hex": "#0096FF"
+    },
+    {
+      "name": "Neon Green",
+      "value": "rgb(var(--neon-green))",
+      "hex": "#39FF14"
+    },
+    {
+      "name": "Neon Yellow",
+      "value": "rgb(var(--neon-yellow))",
+      "hex": "#FFFF00"
+    },
+    {
+      "name": "Neon Purple",
+      "value": "rgb(var(--neon-purple))",
+      "hex": "#BC13FE"
+    },
+    {
+      "name": "Neon Cyan",
+      "value": "rgb(var(--neon-cyan))",
+      "hex": "#00FFFF"
+    }
+  ],
+  "planetaryHouses": {
+    "Jupiter": {
+      "name": "Jupiter",
+      "symbol": "♃",
+      "color": "#FFA500",
+      "description": "The house of expansion and wisdom"
+    },
+    "Saturn": {
+      "name": "Saturn",
+      "symbol": "♄",
+      "color": "#DAA520",
+      "description": "The house of discipline and structure"
+    },
+    "Mars": {
+      "name": "Mars",
+      "symbol": "♂",
+      "color": "#CD5C5C",
+      "description": "The house of war and aggression"
+    },
+    "Neptune": {
+      "name": "Neptune",
+      "symbol": "♆",
+      "color": "#4682B4",
+      "description": "The house of illusion and dreams"
+    },
+    "Mercury": {
+      "name": "Mercury",
+      "symbol": "☿",
+      "color": "#C0C0C0",
+      "description": "The house of communication and speed"
+    },
+    "Venus": {
+      "name": "Venus",
+      "symbol": "♀",
+      "color": "#FFB6C1",
+      "description": "The house of love and beauty"
+    },
+    "Sol": {
+      "name": "Sol",
+      "symbol": "☉",
+      "color": "#FFD700",
+      "description": "The house of the sun and vitality"
+    }
+  },
+  "statRanges": {
+    "hp": {
+      "min": 2,
+      "max": 6,
+      "description": "Variable baseline survivability"
+    },
+    "defense": {
+      "min": 1,
+      "max": 4,
+      "description": "Flat damage reduction"
+    },
+    "attackPower": {
+      "min": 3,
+      "max": 9,
+      "description": "Percentage-based modifier for attack damage"
+    },
+    "speed": {
+      "min": 50,
+      "max": 79,
+      "description": "Pixels/second movement scalar"
+    }
+  },
+  "characterTypes": {
+    "tank": {
+      "name": "Tank",
+      "description": "High HP and defense, slow movement",
+      "preferredStats": {
+        "hp": "high",
+        "defense": "high",
+        "attackPower": "low",
+        "speed": "low"
+      },
+      "suggestedEmojis": ["🐻", "🐮", "🦍", "🐳", "🐋"],
+      "suggestedElements": ["Earth", "Ice"]
+    },
+    "assassin": {
+      "name": "Assassin",
+      "description": "High speed and attack, low defense",
+      "preferredStats": {
+        "hp": "low",
+        "defense": "low", 
+        "attackPower": "high",
+        "speed": "high"
+      },
+      "suggestedEmojis": ["🐱", "🦊", "🐭", "🐞", "🦅"],
+      "suggestedElements": ["Electric", "Air"]
+    },
+    "balanced": {
+      "name": "Balanced",
+      "description": "Moderate stats across all categories",
+      "preferredStats": {
+        "hp": "medium",
+        "defense": "medium",
+        "attackPower": "medium",
+        "speed": "medium"
+      },
+      "suggestedEmojis": ["🦁", "🐯", "🐺", "🐗", "🦜"],
+      "suggestedElements": ["Fire", "Water"]
+    },
+    "mage": {
+      "name": "Mage",
+      "description": "High attack power, moderate speed, low defense",
+      "preferredStats": {
+        "hp": "medium",
+        "defense": "low",
+        "attackPower": "high",
+        "speed": "medium"
+      },
+      "suggestedEmojis": ["🐙", "🐉", "🐲", "🦄", "🐸"],
+      "suggestedElements": ["Fire", "Electric", "Ice"]
+    },
+    "support": {
+      "name": "Support",
+      "description": "Moderate HP and defense, focus on utility",
+      "preferredStats": {
+        "hp": "medium",
+        "defense": "medium",
+        "attackPower": "low",
+        "speed": "high"
+      },
+      "suggestedEmojis": ["🐰", "🦝", "🐹", "🐷", "🐧"],
+      "suggestedElements": ["Water", "Air"]
+    }
+  }
+}

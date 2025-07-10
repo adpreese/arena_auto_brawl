@@ -192,7 +192,7 @@ export class AIController {
     }
 
     const normalizedDirection = normalize(direction);
-    const speed = character.stats.speed * 0.7; // Slower, more defensive
+    const speed = shouldRunAway ? character.stats.speed * (0.5 + (0.5 * Math.random())) : character.stats.speed; // Slower, more defensive
 
     character.velocity = {
       x: normalizedDirection.x * speed,

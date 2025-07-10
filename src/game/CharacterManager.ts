@@ -198,7 +198,7 @@ export class CharacterManager {
     if (!player.isDead) return 1; // Winner
     
     
-    return this.deathTracker.indexOf(player.id) + 1;
+    return GAME_CONFIG.TOTAL_COMBATANTS - this.deathTracker.indexOf(player.id);
   }
   
   addEventListener(listener: (event: any) => void): void {

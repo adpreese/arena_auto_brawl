@@ -2,19 +2,18 @@
 import { Vec2, Character, LevelUpOption, PlanetaryHouse, AttackEffect, Stats, Element } from './types';
 import { GAME_CONFIG } from './config';
 import { elementRegistry } from './ElementRegistry';
+import { characterRegistry } from './CharacterRegistry';
 
 export function randomStat(): number {
   return Math.floor(Math.random() * 6); // 0-5 inclusive
 }
 
 export function randomEmoji(): string {
-  const emojis = GAME_CONFIG.CHARACTER_EMOJIS;
-  return emojis[Math.floor(Math.random() * emojis.length)];
+  return characterRegistry.getRandomEmoji();
 }
 
 export function randomColor(): string {
-  const colors = GAME_CONFIG.CHARACTER_COLORS;
-  return colors[Math.floor(Math.random() * colors.length)];
+  return characterRegistry.getRandomColor();
 }
 
 export function distance(a: Vec2, b: Vec2): number {
@@ -180,34 +179,15 @@ export function applyLevelUpOption(character: Character, option: LevelUpOption):
 }
 
 export function randomPlanetaryHouse(): PlanetaryHouse {
-  const houses: PlanetaryHouse[] = ['Jupiter', 'Saturn', 'Mars', 'Neptune', 'Mercury', 'Venus', 'Sol'];
-  return houses[Math.floor(Math.random() * houses.length)];
+  return characterRegistry.getRandomPlanetaryHouse() as PlanetaryHouse;
 }
 
 export function getPlanetaryHouseSymbol(house: PlanetaryHouse): string {
-  const symbols: Record<PlanetaryHouse, string> = {
-    Jupiter: '♃',
-    Saturn: '♄', 
-    Mars: '♂',
-    Neptune: '♆',
-    Mercury: '☿',
-    Venus: '♀',
-    Sol: '☉'
-  };
-  return symbols[house];
+  return characterRegistry.getPlanetaryHouseSymbol(house);
 }
 
 export function getPlanetaryHouseColor(house: PlanetaryHouse): string {
-  const colors: Record<PlanetaryHouse, string> = {
-    Jupiter: '#FFA500', // Orange
-    Saturn: '#DAA520', // Gold
-    Mars: '#CD5C5C', // Red
-    Neptune: '#4682B4', // Blue
-    Mercury: '#C0C0C0', // Silver
-    Venus: '#FFB6C1', // Pink
-    Sol: '#FFD700' // Yellow
-  };
-  return colors[house];
+  return characterRegistry.getPlanetaryHouseColor(house);
 }
 
 export function getAttackEffects(): AttackEffect[] {
@@ -299,13 +279,34 @@ export function randomAttackEffect(): AttackEffect {
 
 // Helper function to create random stats with the new system
 export function createRandomStats(): Stats {
+  const statRanges = characterRegistry.getStatRanges();
   return {
-    hp: 2 + Math.floor(Math.random() * 5), // 15-25
-    defense: 1 + Math.floor(Math.random() * 4), // 1-5
-    attackPower: 3 + Math.floor(Math.random() * 7), // 3-10
-    speed: 50 + Math.floor(Math.random() * 30), // 50-80
+    hp: statRanges.hp.min + Math.floor(Math.random() * (statRanges.hp.max - statRanges.hp.min + 1)),
+    defense: statRanges.defense.min + Math.floor(Math.random() * (statRanges.defense.max - statRanges.defense.min + 1)),
+    attackPower: statRanges.attackPower.min + Math.floor(Math.random() * (statRanges.attackPower.max - statRanges.attackPower.min + 1)),
+    speed: statRanges.speed.min + Math.floor(Math.random() * (statRanges.speed.max - statRanges.speed.min + 1)),
     element: elementRegistry.getRandomElement()
   };
+}
+
+// Create random stats based on character type (for more variety)
+export function createRandomStatsForType(type?: string): Stats {
+  const characterType = type || characterRegistry.getRandomCharacterType();
+  const baseStats = characterRegistry.createRandomStatsForType(characterType);
+  
+  return {
+    hp: baseStats.hp,
+    defense: baseStats.defense,
+    attackPower: baseStats.attackPower,
+    speed: baseStats.speed,
+    element: elementRegistry.getRandomElement()
+  };
+}
+
+// Get a random emoji that fits a character type
+export function randomEmojiForType(type?: string): string {
+  const characterType = type || characterRegistry.getRandomCharacterType();
+  return characterRegistry.getRandomEmojiForType(characterType);
 }
 
 // AOE Calculation Functions

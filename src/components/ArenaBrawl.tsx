@@ -92,7 +92,7 @@ const ArenaBrawl: React.FC = () => {
     if (combatSystemRef.current.checkForGameEnd()) {
       const player = characterManagerRef.current.getPlayerCharacter();
       const place = characterManagerRef.current.getPlayerPlace();
-      const score = GAME_CONFIG.TOTAL_COMBATANTS - place;
+      const score = Math.abs(place - GAME_CONFIG.TOTAL_COMBATANTS - 1);
       characterManagerRef.current.clearDeathTracker()
       
       const result: GameResult = {
@@ -709,6 +709,20 @@ const ArenaBrawl: React.FC = () => {
                       <div className="text-xs text-muted-foreground">
                         HP: {gameSession.playerCharacter.stats.hp} | ATK: {gameSession.playerCharacter.stats.attackPower} | DEF: {gameSession.playerCharacter.stats.defense} | SPD: {gameSession.playerCharacter.stats.speed}
                       </div>
+                      <div className="text-xs mt-1 flex items-center gap-3">
+                        <span 
+                          className="flex items-center gap-1"
+                          style={{ color: elementRegistry.getElementColor(gameSession.playerCharacter.stats.element) }}
+                        >
+                          {elementRegistry.getElementIcon(gameSession.playerCharacter.stats.element)} {gameSession.playerCharacter.stats.element}
+                        </span>
+                        <span 
+                          className="flex items-center gap-1"
+                          style={{ color: getPlanetaryHouseColor(gameSession.playerCharacter.planetaryHouse) }}
+                        >
+                          {getPlanetaryHouseSymbol(gameSession.playerCharacter.planetaryHouse)} {gameSession.playerCharacter.planetaryHouse}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   
@@ -811,6 +825,15 @@ const ArenaBrawl: React.FC = () => {
                             <div className="flex justify-between">
                               <span>Attack:</span>
                               <span className="text-neon-purple">{card.character.equippedAttack.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>House:</span>
+                              <span 
+                                className="text-xs"
+                                style={{ color: getPlanetaryHouseColor(card.character.planetaryHouse) }}
+                              >
+                                {getPlanetaryHouseSymbol(card.character.planetaryHouse)} {card.character.planetaryHouse}
+                              </span>
                             </div>
                           </div>
                         )}

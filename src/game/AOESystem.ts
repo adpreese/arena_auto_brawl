@@ -57,7 +57,7 @@ export class AOESystem {
     // Set up visual style
     ctx.globalAlpha = alpha; // Semi-transparent
     ctx.strokeStyle = `rgba(11, 11, 11, ${alpha})`;
-    ctx.fillStyle = `rgba(${attackEffect.particleColor}, ${alpha * 0.1})`;
+    ctx.fillStyle = `rgba(${attackEffect.particleColor}, ${alpha})`;
     ctx.lineWidth = 2;
 
     switch (attackEffect.aoeShape) {
