@@ -82,8 +82,8 @@
   },
   "statRanges": {
     "hp": {
-      "min": 2,
-      "max": 6,
+      "min": 12,
+      "max": 16,
       "description": "Variable baseline survivability"
     },
     "defense": {
@@ -97,7 +97,7 @@
       "description": "Percentage-based modifier for attack damage"
     },
     "speed": {
-      "min": 50,
+      "min": 30,
       "max": 79,
       "description": "Pixels/second movement scalar"
     }

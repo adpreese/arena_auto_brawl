@@ -15,6 +15,7 @@ import { upgradeEnemyCharacter, randomPlanetaryHouse, getPlanetaryHouseSymbol, g
 import { ShopSystem } from '@/game/ShopSystem';
 import { InventorySystem } from '@/game/InventorySystem';
 import { elementRegistry } from '@/game/ElementRegistry';
+import { audioManager } from '@/game/AudioManager';
 import Leaderboard from '@/components/Leaderboard';
 
 type GameState = 'CHAR_SELECT' | 'PLAYING' | 'ROUND_END' | 'GAME_OVER' | 'LEADERBOARD' | 'UPGRADE_PHASE';
@@ -145,6 +146,14 @@ const ArenaBrawl: React.FC = () => {
       }
     };
   }, [gameState, gameLoop]);
+
+  // Cleanup audio on component unmount
+  useEffect(() => {
+    return () => {
+      // Note: We don't destroy the audio manager here since it's a singleton
+      // and might be used across page navigations
+    };
+  }, []);
   
   // Set up event listeners
   useEffect(() => {
@@ -152,9 +161,21 @@ const ArenaBrawl: React.FC = () => {
       switch (event.type) {
         case 'combat_hit':
           if (event.data.attackEffect) {
-            particleSystemRef.current.spawnAttackEffect(event.data.position, event.data.attackEffect);
+            particleSystemRef.current.spawnAttackEffect(
+              event.data.position, 
+              event.data.attackEffect, 
+              event.data.attacker, 
+              event.data.target
+            );
+            
+            // Play appropriate sound effect based on elemental effectiveness
+            if (event.data.effectivenessType) {
+              audioManager.playAttackSound(event.data.effectivenessType);
+            }
           } else {
             particleSystemRef.current.spawnHitEffect(event.data.position);
+            // Play regular attack sound for non-elemental hits
+            audioManager.playAttackSound('regular-attack');
           }
           break;
         

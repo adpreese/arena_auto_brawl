@@ -93,6 +93,22 @@ export class ElementRegistry {
     const attackerMeta = this.elements.get(attacker);
     return attackerMeta?.weakAgainst.includes(defender) || false;
   }
+
+  /**
+   * Check if an attack is super effective (attacker has advantage over defender)
+   */
+  isSuperEffective(attackElement: Element, defenderElement: Element): boolean {
+    const defenderMeta = this.elements.get(defenderElement);
+    return defenderMeta?.weakAgainst.includes(attackElement) || false;
+  }
+
+  /**
+   * Check if an attack is not very effective (defender resists attacker)
+   */
+  isNotVeryEffective(attackElement: Element, defenderElement: Element): boolean {
+    const defenderMeta = this.elements.get(defenderElement);
+    return defenderMeta?.strongAgainst.includes(attackElement) || false;
+  }
 }
 
 // Export singleton instance

@@ -112,6 +112,7 @@ export interface Particle {
   size: number;
   color: string;
   type: 'hit' | 'death' | 'death_icon';
+  hasGoldOutline?: boolean; // For super effective attacks
 }
 
 export interface AOEIndicator {

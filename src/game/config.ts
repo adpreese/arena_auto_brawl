@@ -5,7 +5,7 @@ export const GAME_CONFIG = {
   PARTICLE_POOL_SIZE: 200,
   CHARACTER_SIZE: 48,
   FPS: 60,
-  TOTAL_COMBATANTS: 4,
+  TOTAL_COMBATANTS: 20,
   
   // Base stat values
   BASE_ATTACK_RANGE: 50,

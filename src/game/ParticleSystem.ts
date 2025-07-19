@@ -1,7 +1,8 @@
 // Particle System for Visual Effects
-import { Particle, Vec2, AttackEffect } from './types';
+import { Particle, Vec2, AttackEffect, Character } from './types';
 import { GAME_CONFIG } from './config';
 import { generateUniqueId } from './utils';
+import { elementRegistry } from './ElementRegistry';
 
 export class ParticleSystem {
   private particles: Map<string, Particle> = new Map();
@@ -51,14 +52,18 @@ export class ParticleSystem {
     }
   }
   
-  spawnAttackEffect(position: Vec2, attackEffect: AttackEffect): void {
+  spawnAttackEffect(position: Vec2, attackEffect: AttackEffect, attacker?: Character, target?: Character): void {
     const particleCount = this.getParticleCountForAttack(attackEffect);
+    
+    // Check if attack is super effective
+    const isSuperEffective = attacker && target ? 
+      elementRegistry.isSuperEffective(attackEffect.element, target.stats.element) : false;
     
     for (let i = 0; i < particleCount; i++) {
       const particle = this.getParticleFromPool();
       if (!particle) continue;
       
-      this.configureAttackParticle(particle, position, attackEffect, i, particleCount);
+      this.configureAttackParticle(particle, position, attackEffect, i, particleCount, isSuperEffective);
       this.particles.set(particle.id, particle);
     }
   }
@@ -74,11 +79,15 @@ export class ParticleSystem {
     }
   }
 
-  private configureAttackParticle(particle: Particle, position: Vec2, attackEffect: AttackEffect, index: number, total: number): void {
+  private configureAttackParticle(particle: Particle, position: Vec2, attackEffect: AttackEffect, index: number, total: number, isSuperEffective: boolean = false): void {
     particle.position = { ...position };
     particle.life = 0;
-    particle.color = attackEffect.particleColor;
     particle.type = 'hit';
+    particle.hasGoldOutline = isSuperEffective;
+    
+    // Use element-specific color instead of hardcoded colors
+    const elementColor = this.getElementColorRGB(attackEffect.element);
+    particle.color = elementColor;
 
     switch (attackEffect.particleEffect) {
       case 'explosion':
@@ -88,9 +97,13 @@ export class ParticleSystem {
           x: Math.cos(explosionAngle) * explosionSpeed,
           y: Math.sin(explosionAngle) * explosionSpeed
         };
-        particle.color = '120, 255, 255'
         particle.maxLife = 800;
         particle.size = 8 + Math.random() * 6;
+        // Add intensity for super effective attacks
+        if (isSuperEffective) {
+          particle.size *= 1.3;
+          particle.maxLife *= 1.2;
+        }
         break;
 
       case 'spark':
@@ -102,7 +115,10 @@ export class ParticleSystem {
         };
         particle.maxLife = 600;
         particle.size = 3 + Math.random() * 4;
-        particle.color = '220, 220, 55'
+        if (isSuperEffective) {
+          particle.size *= 1.3;
+          particle.maxLife *= 1.2;
+        }
         break;
 
       case 'crystals':
@@ -114,7 +130,10 @@ export class ParticleSystem {
         };
         particle.maxLife = 1200;
         particle.size = 6 + Math.random() * 8;
-        particle.color = '220, 55, 55'
+        if (isSuperEffective) {
+          particle.size *= 1.3;
+          particle.maxLife *= 1.2;
+        }
         break;
 
       case 'cloud':
@@ -126,7 +145,10 @@ export class ParticleSystem {
         };
         particle.maxLife = 2000;
         particle.size = 4 + Math.random() * 6;
-        particle.color = '55, 55, 220'
+        if (isSuperEffective) {
+          particle.size *= 1.3;
+          particle.maxLife *= 1.2;
+        }
         break;
 
       case 'slash':
@@ -138,14 +160,16 @@ export class ParticleSystem {
         };
         particle.maxLife = 500;
         particle.size = 5 + Math.random() * 5;
-        particle.color = '55, 220, 55'
+        if (isSuperEffective) {
+          particle.size *= 1.3;
+          particle.maxLife *= 1.2;
+        }
         break;
 
       default:
         particle.velocity = { x: 0, y: 0 };
         particle.maxLife = 1000;
         particle.size = 5;
-        particle.color = '20, 20, 20'
     }
   }
 
@@ -256,6 +280,15 @@ export class ParticleSystem {
         // Regular particle rendering
         const size = particle.size * (0.5 + lifeRatio * 0.5);
         
+        // Draw gold outline for super effective attacks
+        if (particle.hasGoldOutline) {
+          ctx.strokeStyle = `rgba(255, 215, 0, ${alpha * 0.8})`; // Gold color
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(particle.position.x, particle.position.y, size + 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        
         // Set particle color with alpha
         ctx.fillStyle = `rgba(${particle.color}, ${alpha})`;
         
@@ -289,6 +322,23 @@ export class ParticleSystem {
     if (this.particlePool.length < GAME_CONFIG.PARTICLE_POOL_SIZE) {
       this.particlePool.push(particle);
     }
+  }
+
+  private getElementColorRGB(element: string): string {
+    const hexColor = elementRegistry.getElementColor(element);
+    return this.hexToRGB(hexColor);
+  }
+
+  private hexToRGB(hex: string): string {
+    // Remove the hash if present
+    hex = hex.replace('#', '');
+    
+    // Parse the hex values
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    return `${r}, ${g}, ${b}`;
   }
   
   clear(): void {

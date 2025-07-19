@@ -3,6 +3,7 @@ import { Character, Vec2 } from './types';
 import { GAME_CONFIG } from './config';
 import { isInAttackAOE, normalize, calculateDamage } from './utils';
 import { CharacterManager } from './CharacterManager';
+import { elementRegistry } from './ElementRegistry';
 
 export class CombatSystem {
   private characterManager: CharacterManager;
@@ -60,6 +61,23 @@ export class CombatSystem {
       const damage = calculateDamage(attacker, target); // Use new damage calculation
       this.characterManager.takeDamage(target.id, damage, attacker.id);
       
+      // Calculate effectiveness for audio feedback
+      const elementalModifier = elementRegistry.calculateElementalModifier(
+        attacker.equippedAttack.element,
+        attacker.stats.element,
+        target.stats.element
+      );
+      
+      // Determine effectiveness type
+      let effectivenessType: 'super-effective' | 'not-very-effective' | 'regular-attack';
+      if (elementalModifier > 1.2) {
+        effectivenessType = 'super-effective';
+      } else if (elementalModifier < 0.8) {
+        effectivenessType = 'not-very-effective';
+      } else {
+        effectivenessType = 'regular-attack';
+      }
+      
       // Emit combat hit event for each target
       this.emitEvent({
         type: 'combat_hit',
@@ -68,7 +86,9 @@ export class CombatSystem {
           target,
           damage,
           position: { ...target.position },
-          attackEffect: attacker.equippedAttack
+          attackEffect: attacker.equippedAttack,
+          elementalModifier,
+          effectivenessType
         }
       });
     }
