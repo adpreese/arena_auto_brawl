@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useCanvasSize } from '@/hooks/useResponsive';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,9 @@ import { AIController } from '@/game/AIController';
 import { CombatSystem } from '@/game/CombatSystem';
 import { ParticleSystem } from '@/game/ParticleSystem';
 import { AOESystem } from '@/game/AOESystem';
-import { ZoneSystem } from '@/game/ZoneSystem';
-import { Character, GameResult, GameSession, RoundResult, LeaderboardEntry, ShopState, ShopCard, ZoneState } from '@/game/types';
+import { DamageIndicatorSystem } from '@/game/DamageIndicatorSystem';
+import { RoundTimerSystem, RoundTimerState } from '@/game/RoundTimerSystem';
+import { Character, GameResult, GameSession, RoundResult, LeaderboardEntry, ShopState, ShopCard } from '@/game/types';
 import { GAME_CONFIG } from '@/game/config';
 import { getLeaderboard, addLeaderboardEntry, isHighScore } from '@/lib/leaderboard';
 import { upgradeEnemyCharacter, randomPlanetaryHouse, getPlanetaryHouseSymbol, getPlanetaryHouseColor, randomAttackEffect, createRandomStats } from '@/game/utils';
@@ -24,6 +26,9 @@ const ArenaBrawl: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
+  
+  // Responsive state
+  const { isMobile, isTablet, isDesktop, canvasSize } = useCanvasSize();
   
   const [gameState, setGameState] = useState<GameState>('CHAR_SELECT');
   const [candidates, setCandidates] = useState<Character[]>([]);
@@ -44,8 +49,8 @@ const ArenaBrawl: React.FC = () => {
   const [hoveredCharacter, setHoveredCharacter] = useState<Character | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shopState, setShopState] = useState<ShopState | null>(null);
-  const [zoneState, setZoneState] = useState<ZoneState | null>(null);
   const [hoveredInventoryItem, setHoveredInventoryItem] = useState<{ item: any; position: { x: number; y: number } } | null>(null);
+  const [timerState, setTimerState] = useState<RoundTimerState | null>(null);
   
   // Game systems
   const characterManagerRef = useRef<CharacterManager>(new CharacterManager());
@@ -55,7 +60,8 @@ const ArenaBrawl: React.FC = () => {
   const aoeSystemRef = useRef<AOESystem>(new AOESystem());
   const shopSystemRef = useRef<ShopSystem>(new ShopSystem());
   const inventorySystemRef = useRef<InventorySystem>(new InventorySystem());
-  const zoneSystemRef = useRef<ZoneSystem>(new ZoneSystem());
+  const damageIndicatorSystemRef = useRef<DamageIndicatorSystem>(new DamageIndicatorSystem());
+  const roundTimerSystemRef = useRef<RoundTimerSystem>(new RoundTimerSystem());
   
   // Initialize character selection
   useEffect(() => {
@@ -76,15 +82,17 @@ const ArenaBrawl: React.FC = () => {
     //if (dt > 0.05) return; // Skip frame if too much time has passed
     
     // Update game systems
-    zoneSystemRef.current.update(currentTime, characterManagerRef.current.getAllCharacters());
-    aiControllerRef.current.update(characterManagerRef.current.getAllCharacters(), dt);
+    aiControllerRef.current.update(characterManagerRef.current.getLivingCharacters(), dt);
     combatSystemRef.current.update(dt);
     characterManagerRef.current.removeDead();
     particleSystemRef.current.update(dt);
     aoeSystemRef.current.update(dt);
+    damageIndicatorSystemRef.current.update(dt);
+    roundTimerSystemRef.current.update(currentTime);
     
-    // Update zone state for UI
-    setZoneState(zoneSystemRef.current.getZoneState());
+    
+    // Update timer state for UI
+    setTimerState(roundTimerSystemRef.current.getState());
     
     // Update living characters for UI
     setLivingCharacters(characterManagerRef.current.getLivingCharacters());
@@ -177,6 +185,18 @@ const ArenaBrawl: React.FC = () => {
             // Play regular attack sound for non-elemental hits
             audioManager.playAttackSound('regular-attack');
           }
+          
+          // Spawn damage indicator
+          if (event.data.damageIndicator) {
+            const indicatorData = event.data.damageIndicator;
+            damageIndicatorSystemRef.current.spawnDamageIndicator(
+              event.data.position,
+              indicatorData.damage,
+              indicatorData.elementalModifier,
+              indicatorData.effectivenessType,
+              indicatorData.attackElement
+            );
+          }
           break;
         
         case 'aoe_attack':
@@ -201,15 +221,39 @@ const ArenaBrawl: React.FC = () => {
             gold: prev.gold + event.data.scoreAwarded
           }));
           break;
+        
+        case 'timer_warning':
+          // Timer warning - could add audio/visual effects here
+          console.log('Timer warning: 5 seconds remaining');
+          break;
+        
+        case 'timer_expired':
+          // Timer expired - overtime begins
+          console.log('Timer expired! Overtime damage begins!');
+          break;
+        
+        case 'overtime_damage':
+          // Deal damage to all living characters
+          const livingChars = characterManagerRef.current.getLivingCharacters();
+          for (const character of livingChars) {
+            characterManagerRef.current.takeDamage(
+              character.id, 
+              event.data.damage, 
+              'timer' // attacker ID for overtime damage
+            );
+          }
+          break;
       }
     };
     
     combatSystemRef.current.addEventListener(handleGameEvent);
     characterManagerRef.current.addEventListener(handleGameEvent);
+    roundTimerSystemRef.current.addEventListener(handleGameEvent);
     
     return () => {
       combatSystemRef.current.removeEventListener(handleGameEvent);
       characterManagerRef.current.removeEventListener(handleGameEvent);
+      roundTimerSystemRef.current.removeEventListener(handleGameEvent);
     };
   }, []);
   
@@ -224,37 +268,87 @@ const ArenaBrawl: React.FC = () => {
     ctx.fillStyle = '#77aa77';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw arena border
-    ctx.strokeStyle = '#222222';
+    // Draw arena border - clear boundary definition
+    ctx.save();
+    
+    // Draw outer arena boundary (main border)
+    ctx.strokeStyle = '#1a1a1a'; // Dark gray for clear boundary
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw inner arena boundary for better definition
+    ctx.strokeStyle = '#333333'; // Slightly lighter for contrast
+    ctx.lineWidth = 2;
+    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+    
+    // Draw corner markers to emphasize square boundaries
+    ctx.strokeStyle = '#4a4a4a';
     ctx.lineWidth = 3;
-    ctx.strokeRect(1, 1, GAME_CONFIG.ARENA_SIZE - 2, GAME_CONFIG.ARENA_SIZE - 2);
+    const cornerSize = Math.min(20, canvas.width * 0.05);
+    
+    // Top-left corner
+    ctx.beginPath();
+    ctx.moveTo(cornerSize, 0);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(0, cornerSize);
+    ctx.stroke();
+    
+    // Top-right corner
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - cornerSize, 0);
+    ctx.lineTo(canvas.width, 0);
+    ctx.lineTo(canvas.width, cornerSize);
+    ctx.stroke();
+    
+    // Bottom-left corner
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height - cornerSize);
+    ctx.lineTo(0, canvas.height);
+    ctx.lineTo(cornerSize, canvas.height);
+    ctx.stroke();
+    
+    // Bottom-right corner
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - cornerSize, canvas.height);
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(canvas.width, canvas.height - cornerSize);
+    ctx.stroke();
+    
+    ctx.restore();
     
     // Draw characters
     const characters = characterManagerRef.current.getAllCharacters();
+    const scaleFactor = canvas.width / GAME_CONFIG.ARENA_SIZE;
+    const characterSize = GAME_CONFIG.CHARACTER_SIZE * scaleFactor;
+    
     for (const character of characters) {
       if (character.isDead) continue;
       
       ctx.save();
       
+      // Scale character position
+      const scaledX = character.position.x * scaleFactor;
+      const scaledY = character.position.y * scaleFactor;
+      
       // Character background
       ctx.fillStyle = character.color;
       ctx.beginPath();
-      ctx.arc(character.position.x, character.position.y, GAME_CONFIG.CHARACTER_SIZE / 2, 0, Math.PI * 2);
+      ctx.arc(scaledX, scaledY, characterSize / 2, 0, Math.PI * 2);
       ctx.fill();
       
       // Character emoji
-      ctx.font = `${GAME_CONFIG.CHARACTER_SIZE * 0.6}px Arial`;
+      ctx.font = `${characterSize * 0.6}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = 'white';
-      ctx.fillText(character.emoji, character.position.x, character.position.y);
+      ctx.fillText(character.emoji, scaledX, scaledY);
       
-      // Player indicator
+      // Player indicator - bright yellow circle
       if (character.isPlayer) {
-        ctx.strokeStyle = 'hsl(var(--primary))';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#FFD700'; // Bright yellow/gold color
+        ctx.lineWidth = Math.max(1, 2 * scaleFactor);
         ctx.beginPath();
-        ctx.arc(character.position.x, character.position.y, GAME_CONFIG.CHARACTER_SIZE / 2 + 5, 0, Math.PI * 2);
+        ctx.arc(scaledX, scaledY, characterSize / 2 + (8 * scaleFactor), 0, Math.PI * 2);
         ctx.stroke();
       }
       
@@ -264,11 +358,12 @@ const ArenaBrawl: React.FC = () => {
     // Draw AOE indicators (before particles so particles render on top)
     aoeSystemRef.current.render(ctx);
     
-    // Draw zone
-    zoneSystemRef.current.render(ctx);
     
     // Draw particles
-    particleSystemRef.current.render(ctx);
+    particleSystemRef.current.render(ctx, scaleFactor);
+    
+    // Draw damage indicators
+    damageIndicatorSystemRef.current.render(ctx);
   }, []);
   
   const handleCharacterSelect = (character: Character) => {
@@ -284,8 +379,6 @@ const ArenaBrawl: React.FC = () => {
     
     setSelectedCharacter(playerCharacter);
     
-    // Reset zone for new game
-    zoneSystemRef.current.reset();
     
     // Spawn combatants and store enemy characters for later rounds
     characterManagerRef.current.spawnCombatants(playerCharacter);
@@ -297,6 +390,7 @@ const ArenaBrawl: React.FC = () => {
       enemyCharacters 
     }));
     setLivingCharacters(characterManagerRef.current.getLivingCharacters());
+    roundTimerSystemRef.current.start();
     setGameState('PLAYING');
   };
   
@@ -373,13 +467,14 @@ const ArenaBrawl: React.FC = () => {
       }));
       setGameResult(null);
       particleSystemRef.current.clear();
+      damageIndicatorSystemRef.current.clear();
+      roundTimerSystemRef.current.reset();
       
-      // Reset zone for new round
-      zoneSystemRef.current.reset();
       
       // Start the next round with upgraded characters
       characterManagerRef.current.spawnCombatants(gameSession.playerCharacter, upgradedEnemies);
       setLivingCharacters(characterManagerRef.current.getLivingCharacters());
+      roundTimerSystemRef.current.start();
       setGameState('PLAYING');
     }
   };
@@ -425,9 +520,9 @@ const ArenaBrawl: React.FC = () => {
     setPlayerName('');
     setNewLeaderboardEntry(null);
     setShopState(null);
-    setZoneState(null);
     particleSystemRef.current.clear();
-    zoneSystemRef.current.clear();
+    damageIndicatorSystemRef.current.clear();
+    roundTimerSystemRef.current.reset();
   };
   
   const getHPBarColor = (currentHP: number, maxHP: number) => {
@@ -437,32 +532,51 @@ const ArenaBrawl: React.FC = () => {
     return '#a14444';
   };
 
-  const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleCanvasMouseMove = useCallback((event: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (gameState !== 'PLAYING') return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
     
     const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+    let clientX: number, clientY: number;
+    
+    // Handle both mouse and touch events
+    if ('touches' in event && event.touches.length > 0) {
+      clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
+    } else if ('clientX' in event) {
+      clientX = event.clientX;
+      clientY = event.clientY;
+    } else {
+      return;
+    }
+    
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
     
     // Store mouse position for tooltip
-    setMousePosition({ x: event.clientX, y: event.clientY });
+    setMousePosition({ x: clientX, y: clientY });
     
     // Check if mouse is over any character
     const characters = characterManagerRef.current.getAllCharacters();
+    const scaleFactor = canvas.width / GAME_CONFIG.ARENA_SIZE;
+    const characterSize = GAME_CONFIG.CHARACTER_SIZE * scaleFactor;
     let foundCharacter: Character | null = null;
     
     for (const character of characters) {
       if (character.isDead) continue;
       
+      // Scale character position for hit detection
+      const scaledX = character.position.x * scaleFactor;
+      const scaledY = character.position.y * scaleFactor;
+      
       const distance = Math.sqrt(
-        Math.pow(mouseX - character.position.x, 2) + 
-        Math.pow(mouseY - character.position.y, 2)
+        Math.pow(mouseX - scaledX, 2) + 
+        Math.pow(mouseY - scaledY, 2)
       );
       
-      if (distance <= GAME_CONFIG.CHARACTER_SIZE / 2) {
+      if (distance <= characterSize / 2) {
         foundCharacter = character;
         break;
       }
@@ -476,38 +590,49 @@ const ArenaBrawl: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen-mobile bg-background mobile-stack safe-area-inset">
       {/* Game Canvas */}
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className={`flex-1 flex items-center justify-center ${isMobile ? 'p-2 overflow-auto' : 'p-2 mobile:p-4'}`}>
         <div className="relative">
           <canvas
             ref={canvasRef}
-            width={GAME_CONFIG.ARENA_SIZE}
-            height={GAME_CONFIG.ARENA_SIZE}
-            className="border-4 border-arena-border bg-arena-bg rounded-lg shadow-[var(--arena-glow)]"
+            width={canvasSize.width}
+            height={canvasSize.height}
+            className="border-4 border-arena-border bg-arena-bg rounded-sm shadow-[var(--arena-glow)] max-w-full max-h-full ring-2 ring-gray-400/30"
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={handleCanvasMouseLeave}
+            onTouchStart={isMobile ? handleCanvasMouseMove : undefined}
+            onTouchMove={isMobile ? handleCanvasMouseMove : undefined}
+            onTouchEnd={isMobile ? handleCanvasMouseLeave : undefined}
           />
           
           {/* Character Stats Tooltip */}
           {hoveredCharacter && gameState === 'PLAYING' && (
             <div 
-              className="fixed z-50 bg-ui-panel border border-ui-border rounded-lg p-3 shadow-lg pointer-events-none"
+              className={`fixed z-50 bg-ui-panel border border-ui-border rounded-lg shadow-lg pointer-events-none ${
+                isMobile ? 'p-2 text-xs max-w-xs' : 'p-3 max-w-sm'
+              }`}
               style={{
-                left: mousePosition.x + 10,
-                top: mousePosition.y - 10,
+                left: isMobile 
+                  ? Math.min(mousePosition.x + 10, window.innerWidth - 200)
+                  : mousePosition.x + 10,
+                top: isMobile 
+                  ? Math.max(mousePosition.y - 80, 10)
+                  : mousePosition.y - 10,
                 transform: mousePosition.x > window.innerWidth - 200 ? 'translateX(-100%) translateX(-20px)' : ''
               }}
             >
-              <div className="flex items-center gap-3 mb-2">
+              <div className={`flex items-center gap-2 mb-2 ${isMobile ? 'gap-2' : 'gap-3'}`}>
                 <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                  className={`rounded-full flex items-center justify-center ${
+                    isMobile ? 'w-6 h-6 text-sm' : 'w-8 h-8 text-sm'
+                  }`}
                   style={{ backgroundColor: hoveredCharacter.color }}
                 >
                   {hoveredCharacter.emoji}
                 </div>
-                <div>
-                  <div className="text-sm font-medium">
+                <div className="flex-1">
+                  <div className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>
                     {hoveredCharacter.isPlayer ? (
                       <span className="text-neon-yellow">
                         YOU {hoveredCharacter.level ? `(Lv${hoveredCharacter.level})` : ''}
@@ -518,39 +643,43 @@ const ArenaBrawl: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-xs'}`}>
                     HP: {hoveredCharacter.currentHP}/{hoveredCharacter.stats.hp}
                   </div>
-                  <div className="text-xs flex items-center gap-1">
-                    <span 
-                      className="font-bold"
-                      style={{ color: elementRegistry.getElementColor(hoveredCharacter.stats.element) }}
-                    >
-                      {elementRegistry.getElementIcon(hoveredCharacter.stats.element)}
-                    </span>
-                    <span style={{ color: elementRegistry.getElementColor(hoveredCharacter.stats.element) }}>
-                      {hoveredCharacter.stats.element}
-                    </span>
-                  </div>
-                  <div className="text-xs flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                      <span 
-                        className="font-bold"
-                        style={{ color: getPlanetaryHouseColor(hoveredCharacter.planetaryHouse) }}
-                      >
-                        {getPlanetaryHouseSymbol(hoveredCharacter.planetaryHouse)}
-                      </span>
-                      <span style={{ color: getPlanetaryHouseColor(hoveredCharacter.planetaryHouse) }}>
-                        {hoveredCharacter.planetaryHouse}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span>{hoveredCharacter.equippedAttack.icon}</span>
-                      <span className="text-muted-foreground">
-                        {hoveredCharacter.equippedAttack.name}
-                      </span>
-                    </div>
-                  </div>
+                  {!isMobile && (
+                    <>
+                      <div className="text-xs flex items-center gap-1">
+                        <span 
+                          className="font-bold"
+                          style={{ color: elementRegistry.getElementColor(hoveredCharacter.stats.element) }}
+                        >
+                          {elementRegistry.getElementIcon(hoveredCharacter.stats.element)}
+                        </span>
+                        <span style={{ color: elementRegistry.getElementColor(hoveredCharacter.stats.element) }}>
+                          {hoveredCharacter.stats.element}
+                        </span>
+                      </div>
+                      <div className="text-xs flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <span 
+                            className="font-bold"
+                            style={{ color: getPlanetaryHouseColor(hoveredCharacter.planetaryHouse) }}
+                          >
+                            {getPlanetaryHouseSymbol(hoveredCharacter.planetaryHouse)}
+                          </span>
+                          <span style={{ color: getPlanetaryHouseColor(hoveredCharacter.planetaryHouse) }}>
+                            {hoveredCharacter.planetaryHouse}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span>{hoveredCharacter.equippedAttack.icon}</span>
+                          <span className="text-muted-foreground">
+                            {hoveredCharacter.equippedAttack.name}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -576,11 +705,13 @@ const ArenaBrawl: React.FC = () => {
           
           {/* Character Selection Overlay */}
           {gameState === 'CHAR_SELECT' && gameSession.currentRound === 1 && (
-            <div className="absolute inset-0 bg-background/90 flex items-center justify-center rounded-lg">
-              <Card className="p-8 bg-ui-panel border-ui-border">
-                <div className="text-center mb-4">
-                  <h2 className="text-3xl font-bold text-primary mb-2">Choose Your Fighter</h2>
-                  <div className="text-lg text-muted-foreground">
+            <div className={`mobile-overlay ${!isMobile && 'absolute inset-0 bg-background/90 flex items-center justify-center rounded-lg'}`}>
+              <Card className={`bg-ui-panel border-ui-border ${isMobile ? 'w-full max-w-none border-none' : 'p-8'} ${isMobile && 'bg-transparent'}`}>
+                <div className={`text-center ${isMobile ? 'mb-6' : 'mb-4'}`}>
+                  <h2 className={`font-bold text-primary mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>
+                    Choose Your Fighter
+                  </h2>
+                  <div className={`text-muted-foreground ${isMobile ? 'text-base' : 'text-lg'}`}>
                     Round {gameSession.currentRound} of {gameSession.totalRounds}
                   </div>
                   {gameSession.cumulativeScore > 0 && (
@@ -594,67 +725,118 @@ const ArenaBrawl: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-6">
+                <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-3 gap-6'}`}>
                   {candidates.map((candidate) => (
                     <Card
                       key={candidate.id}
-                      className="p-4 cursor-pointer hover:bg-secondary/50 border-ui-border transition-all hover:scale-105 hover:shadow-[var(--glow-effect)]"
+                      className={`cursor-pointer hover:bg-secondary/50 border-ui-border transition-all touch-target ${
+                        isMobile 
+                          ? 'p-4 hover:scale-102' 
+                          : 'p-4 hover:scale-105 hover:shadow-[var(--glow-effect)]'
+                      }`}
                       onClick={() => handleCharacterSelect(candidate)}
                     >
-                      <div className="text-center">
+                      <div className={`${isMobile ? 'flex items-center gap-4' : 'text-center'}`}>
                         <div 
-                          className="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl"
+                          className={`rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isMobile 
+                              ? 'w-12 h-12 text-xl' 
+                              : 'w-16 h-16 mx-auto mb-3 text-2xl'
+                          }`}
                           style={{ backgroundColor: candidate.color }}
                         >
                           {candidate.emoji}
                         </div>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex justify-center items-center gap-2 mb-2">
-                            <div className="flex items-center gap-1 text-xs">
-                              <span 
-                                className="font-bold text-lg"
-                                style={{ color: getPlanetaryHouseColor(candidate.planetaryHouse) }}
-                              >
-                                {getPlanetaryHouseSymbol(candidate.planetaryHouse)}
-                              </span>
-                              <span 
-                                className="font-medium"
-                                style={{ color: getPlanetaryHouseColor(candidate.planetaryHouse) }}
-                              >
-                                {candidate.planetaryHouse}
-                              </span>
+                        <div className="flex-1">
+                          {candidate.name && (
+                            <div className={`font-bold text-primary mb-2 ${
+                              isMobile ? 'text-base text-left' : 'text-lg text-center'
+                            }`}>
+                              {candidate.name}
                             </div>
-                            <div className="flex items-center gap-1 text-xs">
-                              <span className="text-lg">{candidate.equippedAttack.icon}</span>
-                              <span className="font-medium text-muted-foreground">
-                                {candidate.equippedAttack.name}
-                              </span>
+                          )}
+                          <div className={`space-y-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                            <div className={`flex gap-2 mb-2 ${isMobile ? 'justify-start flex-wrap' : 'justify-center items-center'}`}>
+                              <div className="flex items-center gap-1 text-xs">
+                                <span 
+                                  className={`font-bold ${isMobile ? 'text-base' : 'text-lg'}`}
+                                  style={{ color: getPlanetaryHouseColor(candidate.planetaryHouse) }}
+                                >
+                                  {getPlanetaryHouseSymbol(candidate.planetaryHouse)}
+                                </span>
+                                <span 
+                                  className="font-medium"
+                                  style={{ color: getPlanetaryHouseColor(candidate.planetaryHouse) }}
+                                >
+                                  {isMobile ? candidate.planetaryHouse.slice(0, 4) : candidate.planetaryHouse}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs">
+                                <span className={isMobile ? 'text-base' : 'text-lg'}>{candidate.equippedAttack.icon}</span>
+                                <span className="font-medium text-muted-foreground">
+                                  {isMobile ? candidate.equippedAttack.name.slice(0, 8) : candidate.equippedAttack.name}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Attack Power:</span>
-                            <span className="text-neon-red">{candidate.stats.attackPower}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Defense:</span>
-                            <span className="text-neon-blue">{candidate.stats.defense}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Element:</span>
-                            <span 
-                              className="text-xs"
-                              style={{ color: elementRegistry.getElementColor(candidate.stats.element) }}
-                            >
-                              {elementRegistry.getElementIcon(candidate.stats.element)} {candidate.stats.element}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Speed:</span>
-                            <span className="text-neon-yellow">{candidate.stats.speed}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>HP:</span>
-                            <span className="text-neon-green">{candidate.stats.hp}</span>
+                            {isMobile ? (
+                              // Mobile: Compact grid layout
+                              <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                <div className="flex justify-between">
+                                  <span>ATK:</span>
+                                  <span className="text-neon-red">{candidate.stats.attackPower}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>DEF:</span>
+                                  <span className="text-neon-blue">{candidate.stats.defense}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>SPD:</span>
+                                  <span className="text-neon-yellow">{candidate.stats.speed}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>HP:</span>
+                                  <span className="text-neon-green">{candidate.stats.hp}</span>
+                                </div>
+                                <div className="col-span-2 flex justify-between">
+                                  <span>Element:</span>
+                                  <span 
+                                    className="text-xs"
+                                    style={{ color: elementRegistry.getElementColor(candidate.stats.element) }}
+                                  >
+                                    {elementRegistry.getElementIcon(candidate.stats.element)} {candidate.stats.element}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              // Desktop: Full layout
+                              <>
+                                <div className="flex justify-between">
+                                  <span>Attack Power:</span>
+                                  <span className="text-neon-red">{candidate.stats.attackPower}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Defense:</span>
+                                  <span className="text-neon-blue">{candidate.stats.defense}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Element:</span>
+                                  <span 
+                                    className="text-xs"
+                                    style={{ color: elementRegistry.getElementColor(candidate.stats.element) }}
+                                  >
+                                    {elementRegistry.getElementIcon(candidate.stats.element)} {candidate.stats.element}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Speed:</span>
+                                  <span className="text-neon-yellow">{candidate.stats.speed}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>HP:</span>
+                                  <span className="text-neon-green">{candidate.stats.hp}</span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -667,16 +849,16 @@ const ArenaBrawl: React.FC = () => {
           
           {/* Round End Overlay */}
           {gameState === 'ROUND_END' && gameResult && (
-            <div className="absolute inset-0 bg-background/90 flex items-center justify-center rounded-lg">
-              <Card className="p-8 bg-ui-panel border-ui-border text-center">
-                <h2 className="text-4xl font-bold mb-4">
+            <div className={`mobile-overlay ${!isMobile && 'absolute inset-0 bg-background/90 flex items-center justify-center rounded-lg'}`}>
+              <Card className={`bg-ui-panel border-ui-border text-center ${isMobile ? 'w-full max-w-none border-none bg-transparent' : 'p-8'}`}>
+                <h2 className={`font-bold mb-4 ${isMobile ? 'text-3xl' : 'text-4xl'}`}>
                   {gameResult.place === 1 ? (
                     <span className="text-neon-yellow">🏆 VICTORY! 🏆</span>
                   ) : (
                     <span className="text-neon-red">DEFEATED</span>
                   )}
                 </h2>
-                <div className="space-y-2 mb-6 text-lg">
+                <div className={`space-y-2 mb-6 ${isMobile ? 'text-base' : 'text-lg'}`}>
                   <div>Round {gameSession.currentRound} of {gameSession.totalRounds}</div>
                   <div>Place: <span className="text-primary font-bold">#{gameResult.place}</span></div>
                   <div>Score: <span className="text-neon-cyan font-bold">{gameResult.score}</span></div>
@@ -689,7 +871,9 @@ const ArenaBrawl: React.FC = () => {
                 </div>
                 <Button 
                   onClick={handleContinue}
-                  className="bg-primary hover:bg-primary/80 text-primary-foreground px-8 py-3 text-lg"
+                  className={`bg-primary hover:bg-primary/80 text-primary-foreground touch-target ${
+                    isMobile ? 'w-full py-4 text-lg' : 'px-8 py-3 text-lg'
+                  }`}
                 >
                   {gameSession.isComplete ? 'Finish Game' : 'Next Round'}
                 </Button>
@@ -699,70 +883,91 @@ const ArenaBrawl: React.FC = () => {
           
           {/* Shop/Upgrade Phase Overlay */}
           {gameState === 'UPGRADE_PHASE' && shopState && gameSession.playerCharacter && (
-            <div className="absolute inset-0 bg-background/95 flex items-center justify-center rounded-lg overflow-y-auto">
-              <div className="max-w-6xl w-full p-6">
-                <div className="text-center mb-6">
-                  <h2 className="text-3xl font-bold text-primary mb-2">Shop</h2>
-                  <div className="text-lg text-muted-foreground">
+            <div className={`${isMobile ? 'mobile-overlay' : 'absolute inset-0 bg-background/95 flex justify-start items-start rounded-lg overflow-y-auto p-4'}`}>
+              <div className={`w-full ${isMobile ? 'px-2' : 'max-w-6xl p-6 h-fit'}`}>
+                <div className={`text-center mb-4 ${isMobile ? 'mb-6' : 'mb-6'}`}>
+                  <h2 className={`font-bold text-primary mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>Shop</h2>
+                  <div className={`text-muted-foreground ${isMobile ? 'text-sm' : 'text-lg'}`}>
                     Round {gameSession.currentRound} Complete - Prepare for Round {gameSession.currentRound + 1}
                   </div>
-                  <div className="flex justify-center gap-6 mt-2">
-                    <div className="text-lg font-bold text-neon-cyan">
-                      Total Score: {gameSession.cumulativeScore}
+                  <div className={`flex gap-4 mt-2 ${isMobile ? 'justify-center flex-wrap text-sm' : 'justify-center gap-6'}`}>
+                    <div className={`font-bold text-neon-cyan ${isMobile ? 'text-sm' : 'text-lg'}`}>
+                      {isMobile ? `Score: ${gameSession.cumulativeScore}` : `Total Score: ${gameSession.cumulativeScore}`}
                     </div>
-                    <div className="text-lg font-bold text-gold">
+                    <div className={`font-bold text-gold ${isMobile ? 'text-sm' : 'text-lg'}`}>
                       Gold: {gameSession.gold}
                     </div>
                   </div>
                 </div>
                 
                 {/* Character & Inventory Display */}
-                <div className="flex justify-center items-center gap-6 mb-6">
-                  <div className="flex items-center gap-4">
+                <div className={`flex items-center mb-4 ${
+                  isMobile 
+                    ? 'flex-col gap-4' 
+                    : 'justify-center gap-6 mb-6'
+                }`}>
+                  <div className={`flex items-center gap-3 ${isMobile ? 'w-full justify-center' : 'gap-4'}`}>
                     <div 
-                      className="w-16 h-16 rounded-full flex items-center justify-center text-2xl"
+                      className={`rounded-full flex items-center justify-center ${
+                        isMobile ? 'w-12 h-12 text-xl' : 'w-16 h-16 text-2xl'
+                      }`}
                       style={{ backgroundColor: gameSession.playerCharacter.color }}
                     >
                       {gameSession.playerCharacter.emoji}
                     </div>
-                    <div className="text-left">
-                      <div className="text-sm font-medium">Level {gameSession.playerCharacter.level || 1}</div>
-                      <div className="text-xs text-muted-foreground">
-                        HP: {gameSession.playerCharacter.stats.hp} | ATK: {gameSession.playerCharacter.stats.attackPower} | DEF: {gameSession.playerCharacter.stats.defense} | SPD: {gameSession.playerCharacter.stats.speed}
+                    <div className={`${isMobile ? 'text-center' : 'text-left'}`}>
+                      <div className={`font-medium ${isMobile ? 'text-sm' : 'text-sm'}`}>
+                        Level {gameSession.playerCharacter.level || 1}
                       </div>
-                      <div className="text-xs mt-1 flex items-center gap-3">
-                        <span 
-                          className="flex items-center gap-1"
-                          style={{ color: elementRegistry.getElementColor(gameSession.playerCharacter.stats.element) }}
-                        >
-                          {elementRegistry.getElementIcon(gameSession.playerCharacter.stats.element)} {gameSession.playerCharacter.stats.element}
-                        </span>
-                        <span 
-                          className="flex items-center gap-1"
-                          style={{ color: getPlanetaryHouseColor(gameSession.playerCharacter.planetaryHouse) }}
-                        >
-                          {getPlanetaryHouseSymbol(gameSession.playerCharacter.planetaryHouse)} {gameSession.playerCharacter.planetaryHouse}
-                        </span>
+                      <div className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-xs'}`}>
+                        {isMobile ? (
+                          // Mobile: Compact stats
+                          <>
+                            <div>HP: {gameSession.playerCharacter.stats.hp} | ATK: {gameSession.playerCharacter.stats.attackPower}</div>
+                            <div>DEF: {gameSession.playerCharacter.stats.defense} | SPD: {gameSession.playerCharacter.stats.speed}</div>
+                          </>
+                        ) : (
+                          // Desktop: Single line
+                          `HP: ${gameSession.playerCharacter.stats.hp} | ATK: ${gameSession.playerCharacter.stats.attackPower} | DEF: ${gameSession.playerCharacter.stats.defense} | SPD: ${gameSession.playerCharacter.stats.speed}`
+                        )}
                       </div>
+                      {!isMobile && (
+                        <div className="text-xs mt-1 flex items-center gap-3">
+                          <span 
+                            className="flex items-center gap-1"
+                            style={{ color: elementRegistry.getElementColor(gameSession.playerCharacter.stats.element) }}
+                          >
+                            {elementRegistry.getElementIcon(gameSession.playerCharacter.stats.element)} {gameSession.playerCharacter.stats.element}
+                          </span>
+                          <span 
+                            className="flex items-center gap-1"
+                            style={{ color: getPlanetaryHouseColor(gameSession.playerCharacter.planetaryHouse) }}
+                          >
+                            {getPlanetaryHouseSymbol(gameSession.playerCharacter.planetaryHouse)} {gameSession.playerCharacter.planetaryHouse}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
                   {/* Inventory */}
-                  <div className="flex gap-2">
-                    <div className="text-sm font-medium">Inventory:</div>
+                  <div className={`flex gap-2 ${isMobile ? 'justify-center' : ''}`}>
+                    <div className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}>Inventory:</div>
                     {[0, 1].map(slot => {
                       const item = gameSession.playerCharacter!.inventory[slot];
                       return (
                         <div 
                           key={slot}
-                          className={`w-12 h-12 border-2 rounded-lg flex items-center justify-center text-lg ${
+                          className={`border-2 rounded-lg flex items-center justify-center touch-target ${
+                            isMobile ? 'w-10 h-10 text-sm' : 'w-12 h-12 text-lg'
+                          } ${
                             item 
                               ? 'border-primary bg-primary/10 cursor-pointer hover:bg-primary/20' 
                               : 'border-muted bg-muted/10'
                           }`}
                           onClick={() => item && handleUseItem(item.id)}
                           onMouseEnter={(e) => {
-                            if (item) {
+                            if (item && !isMobile) {
                               setHoveredInventoryItem({
                                 item,
                                 position: { x: e.clientX, y: e.clientY }
@@ -771,13 +976,22 @@ const ArenaBrawl: React.FC = () => {
                           }}
                           onMouseLeave={() => setHoveredInventoryItem(null)}
                           onMouseMove={(e) => {
-                            if (item) {
+                            if (item && !isMobile) {
                               setHoveredInventoryItem({
                                 item,
                                 position: { x: e.clientX, y: e.clientY }
                               });
                             }
                           }}
+                          onTouchStart={(e) => {
+                            if (item && isMobile) {
+                              setHoveredInventoryItem({
+                                item,
+                                position: { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                              });
+                            }
+                          }}
+                          onTouchEnd={() => isMobile && setHoveredInventoryItem(null)}
                         >
                           {item ? item.icon : '+'}
                         </div>
@@ -787,41 +1001,57 @@ const ArenaBrawl: React.FC = () => {
                 </div>
                 
                 {/* Shop Cards */}
-                <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className={`grid gap-3 mb-4 ${
+                  isMobile ? 'grid-cols-1' : 'grid-cols-3 gap-4 mb-6'
+                }`}>
                   {shopState.cards.map((card) => (
                     <Card
                       key={card.id}
-                      className={`p-4 cursor-pointer hover:bg-secondary/50 border-ui-border transition-all hover:scale-105 ${
+                      className={`cursor-pointer hover:bg-secondary/50 border-ui-border transition-all touch-target ${
+                        isMobile 
+                          ? 'p-3 hover:scale-102' 
+                          : 'p-4 hover:scale-105'
+                      } ${
                         gameSession.gold >= card.cost 
                           ? 'hover:shadow-[var(--glow-effect)]' 
                           : 'opacity-50 cursor-not-allowed'
                       }`}
                       onClick={() => gameSession.gold >= card.cost && handleShopPurchase(card)}
                     >
-                      <div className="text-center">
-                        <div className="text-lg font-bold mb-2 text-primary">
-                          {card.type === 'character' ? 'Character' : card.item?.type === 'attack' ? 'Attack' : card.item?.type === 'evolve' ? 'Evolution' : 'Stat Chip'}
-                        </div>
-                        <div className="text-2xl mb-2">
-                          {card.type === 'character' ? card.character?.emoji : card.item?.icon}
-                        </div>
-                        <div className="text-sm font-medium mb-1">
-                          {card.type === 'character' ? 'New Fighter' : card.item?.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground mb-3">
-                          {card.type === 'character' 
-                            ? `Level 1 - ${card.character?.stats.element} element` 
-                            : card.item?.description
-                          }
-                        </div>
-                        
-                        {/* Character Stats */}
-                        {card.type === 'character' && card.character && (
-                          <div className="space-y-1 text-xs mb-3">
-                            <div className="flex justify-between">
-                              <span>HP:</span>
-                              <span className="text-neon-green">{card.character.stats.hp}</span>
+                      <div className={`${isMobile ? 'flex items-center gap-3' : 'text-center'}`}>
+                        {isMobile && (
+                          <div className="flex-shrink-0">
+                            <div className="text-2xl mb-1">
+                              {card.type === 'character' ? card.character?.emoji : card.item?.icon}
                             </div>
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className={`font-bold mb-1 text-primary ${isMobile ? 'text-sm text-left' : 'text-lg mb-2'}`}>
+                            {card.type === 'character' ? 'Character' : card.item?.type === 'attack' ? 'Attack' : card.item?.type === 'evolve' ? 'Evolution' : 'Stat Chip'}
+                          </div>
+                          {!isMobile && (
+                            <div className="text-2xl mb-2">
+                              {card.type === 'character' ? card.character?.emoji : card.item?.icon}
+                            </div>
+                          )}
+                          <div className={`font-medium mb-1 ${isMobile ? 'text-xs text-left' : 'text-sm'}`}>
+                            {card.type === 'character' ? 'New Fighter' : card.item?.name}
+                          </div>
+                          <div className={`text-muted-foreground mb-2 ${isMobile ? 'text-xs text-left' : 'text-xs mb-3'}`}>
+                            {card.type === 'character' 
+                              ? `Level 1 - ${card.character?.stats.element} element` 
+                              : card.item?.description
+                            }
+                          </div>
+                        
+                          {/* Character Stats */}
+                          {card.type === 'character' && card.character && (
+                            <div className={`space-y-1 mb-2 ${isMobile ? 'text-xs' : 'text-xs mb-3'}`}>
+                              <div className="flex justify-between">
+                                <span>HP:</span>
+                                <span className="text-neon-green">{card.character.stats.hp}</span>
+                              </div>
                             <div className="flex justify-between">
                               <span>Attack Power:</span>
                               <span className="text-neon-red">{card.character.stats.attackPower}</span>
@@ -951,8 +1181,11 @@ const ArenaBrawl: React.FC = () => {
                           </div>
                         )}
                         
-                        <div className="text-sm font-bold text-neon-yellow">
-                          {card.cost} Gold
+                          <div className={`font-bold text-neon-yellow ${
+                            isMobile ? 'text-right text-sm' : 'text-sm'
+                          }`}>
+                            {card.cost} Gold
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -960,18 +1193,22 @@ const ArenaBrawl: React.FC = () => {
                 </div>
                 
                 {/* Shop Controls */}
-                <div className="flex justify-center gap-4">
+                <div className={`flex gap-3 ${isMobile ? 'flex-col' : 'justify-center gap-4'}`}>
                   <Button 
                     onClick={handleShopReroll}
                     disabled={gameSession.gold < shopState.rerollCost}
                     variant="outline"
-                    className="px-6 py-2"
+                    className={`touch-target ${
+                      isMobile ? 'w-full py-3' : 'px-6 py-2'
+                    }`}
                   >
                     Reroll ({shopState.rerollCost} Gold)
                   </Button>
                   <Button 
                     onClick={handleShopContinue}
-                    className="bg-primary hover:bg-primary/80 text-primary-foreground px-8 py-2"
+                    className={`bg-primary hover:bg-primary/80 text-primary-foreground touch-target ${
+                      isMobile ? 'w-full py-3' : 'px-8 py-2'
+                    }`}
                   >
                     Start Next Round
                   </Button>
@@ -1094,9 +1331,9 @@ const ArenaBrawl: React.FC = () => {
           {gameState === 'GAME_OVER' && (
             <div className="absolute inset-0 bg-background/90 flex items-center justify-center rounded-lg">
               <Card className="p-8 bg-ui-panel border-ui-border text-center max-w-md">
-                <h2 className="text-4xl font-bold mb-4 text-neon-yellow">🎉 HIGH SCORE! 🎉</h2>
+                <h2 className="text-4xl font-bold mb-4 text-gray-700">🎉 HIGH SCORE! 🎉</h2>
                 <div className="space-y-2 mb-6 text-lg">
-                  <div className="text-2xl font-bold text-neon-cyan">
+                  <div className="text-2xl font-bold text-gray-700">
                     Final Score: {gameSession.cumulativeScore}
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -1105,12 +1342,12 @@ const ArenaBrawl: React.FC = () => {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Enter your name:</label>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">Enter your name:</label>
                     <Input
                       value={playerName}
                       onChange={(e) => setPlayerName(e.target.value)}
                       placeholder="Your name"
-                      className="text-center"
+                      className="text-center text-gray-700"
                       maxLength={20}
                       onKeyPress={(e) => e.key === 'Enter' && handleSubmitScore()}
                     />
@@ -1155,8 +1392,107 @@ const ArenaBrawl: React.FC = () => {
         </div>
       </div>
       
-      {/* Character Status Panel */}
-      {gameState === 'PLAYING' && (
+      {/* Mobile HP Bar and Character Summary */}
+      {gameState === 'PLAYING' && isMobile && (
+        <div className="w-full bg-ui-panel border-t-2 border-ui-border p-3">
+          {/* Player HP Bar */}
+          {livingCharacters.find(c => c.isPlayer) && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-sm"
+                    style={{ backgroundColor: livingCharacters.find(c => c.isPlayer)!.color }}
+                  >
+                    {livingCharacters.find(c => c.isPlayer)!.emoji}
+                  </div>
+                  <span className="text-sm font-medium text-neon-yellow">YOU</span>
+                </div>
+                <span className="text-xs">
+                  {livingCharacters.find(c => c.isPlayer)!.currentHP}/{livingCharacters.find(c => c.isPlayer)!.stats.hp}
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3">
+                <div
+                  className="h-3 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${(livingCharacters.find(c => c.isPlayer)!.currentHP / livingCharacters.find(c => c.isPlayer)!.stats.hp) * 100}%`,
+                    backgroundColor: getHPBarColor(livingCharacters.find(c => c.isPlayer)!.currentHP, livingCharacters.find(c => c.isPlayer)!.stats.hp)
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Other Characters Summary */}
+          <div className="flex flex-wrap gap-2">
+            {livingCharacters
+              .filter(c => !c.isPlayer)
+              .sort((a, b) => b.currentHP - a.currentHP)
+              .map((character) => {
+                const hpRatio = character.currentHP / character.stats.hp;
+                const ringColor = hpRatio > 0.6 ? '#22b222' : hpRatio > 0.3 ? '#a1a122' : '#a14444';
+                
+                return (
+                  <div key={character.id} className="relative">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm relative"
+                      style={{ backgroundColor: character.color }}
+                    >
+                      {character.emoji}
+                      {/* HP Ring */}
+                      <svg 
+                        className="absolute inset-0 w-8 h-8 -rotate-90"
+                        viewBox="0 0 32 32"
+                      >
+                        <circle
+                          cx="16"
+                          cy="16"
+                          r="14"
+                          fill="none"
+                          stroke="rgba(0,0,0,0.2)"
+                          strokeWidth="2"
+                        />
+                        <circle
+                          cx="16"
+                          cy="16"
+                          r="14"
+                          fill="none"
+                          stroke={ringColor}
+                          strokeWidth="2"
+                          strokeDasharray={`${hpRatio * 87.96} 87.96`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+          
+          {/* Compact Game Info */}
+          <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
+            <span>Round {gameSession.currentRound}/{gameSession.totalRounds}</span>
+            {gameSession.cumulativeScore > 0 && (
+              <span className="text-neon-cyan">Score: {gameSession.cumulativeScore}</span>
+            )}
+            {timerState && timerState.isActive && (
+              <span className={`font-bold ${
+                timerState.isInOvertime 
+                  ? 'text-red-500 animate-pulse' 
+                  : timerState.isWarning 
+                    ? 'text-yellow-500' 
+                    : 'text-neon-cyan'
+              }`}>
+                {roundTimerSystemRef.current.getFormattedTime()}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Character Status Panel */}
+      {gameState === 'PLAYING' && !isMobile && (
         <div className="w-60 bg-ui-panel border-l-2 border-ui-border p-4">
           <div className="mb-4">
             <h3 className="text-xl font-bold text-primary">Combatants</h3>
@@ -1178,15 +1514,27 @@ const ArenaBrawl: React.FC = () => {
                 Level {gameSession.playerCharacter.level}
               </div>
             )}
-            {zoneState && zoneState.isActive && (
-              <div className="text-sm text-neon-red mt-1">
-                Zone: {Math.round(zoneState.radius)}px
+            {timerState && timerState.isActive && (
+              <div className={`text-sm mt-1 font-bold ${
+                timerState.isInOvertime 
+                  ? 'text-red-500 animate-pulse' 
+                  : timerState.isWarning 
+                    ? 'text-yellow-500' 
+                    : 'text-neon-cyan'
+              }`}>
+                Timer: {roundTimerSystemRef.current.getFormattedTime()}
               </div>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-y-auto" style={{ height: `${canvasSize.height}px` }}>
             {livingCharacters
-              .sort((a, b) => b.currentHP - a.currentHP)
+              .sort((a, b) => {
+                // Player always comes first
+                if (a.isPlayer && !b.isPlayer) return -1;
+                if (!a.isPlayer && b.isPlayer) return 1;
+                // Then sort by HP (highest to lowest)
+                return b.currentHP - a.currentHP;
+              })
               .map((character) => (
                 <Card key={character.id} className="p-3 bg-card/50 border-ui-border/50">
                   <div className="flex items-center gap-3">

@@ -60,32 +60,32 @@ export class AIController {
       // No target, move randomly
       this.updateRandomMovement(character, dt, currentTime);
       return;
+    } else {
+      // Calculate direction to target
+      const direction = {
+        x: target.position.x - character.position.x,
+        y: target.position.y - character.position.y
+      };
+      
+      const normalizedDirection = normalize(direction);
+      
+      // Add random jitter (±5 degrees)
+      const jitterAngle = (Math.random() - 0.5) * (5 * Math.PI / 180); // ±5 degrees in radians
+      const cos = Math.cos(jitterAngle);
+      const sin = Math.sin(jitterAngle);
+      
+      const jitteredDirection = {
+        x: normalizedDirection.x * cos - normalizedDirection.y * sin,
+        y: normalizedDirection.x * sin + normalizedDirection.y * cos
+      };
+      
+      // Update velocity
+      const speed = character.stats.speed;
+      character.velocity = {
+        x: jitteredDirection.x * speed,
+        y: jitteredDirection.y * speed
+      };
     }
-    
-    // Calculate direction to target
-    const direction = {
-      x: target.position.x - character.position.x,
-      y: target.position.y - character.position.y
-    };
-    
-    const normalizedDirection = normalize(direction);
-    
-    // Add random jitter (±5 degrees)
-    const jitterAngle = (Math.random() - 0.5) * (5 * Math.PI / 180); // ±5 degrees in radians
-    const cos = Math.cos(jitterAngle);
-    const sin = Math.sin(jitterAngle);
-    
-    const jitteredDirection = {
-      x: normalizedDirection.x * cos - normalizedDirection.y * sin,
-      y: normalizedDirection.x * sin + normalizedDirection.y * cos
-    };
-    
-    // Update velocity
-    const speed = character.stats.speed;
-    character.velocity = {
-      x: jitteredDirection.x * speed,
-      y: jitteredDirection.y * speed
-    };
     
     // Update position
     character.position.x += character.velocity.x * dt;
@@ -129,6 +129,7 @@ export class AIController {
     }
   }
   
+
   private handleCollisions(characters: Character[]): void {
     const radius = GAME_CONFIG.CHARACTER_SIZE / 2;
     

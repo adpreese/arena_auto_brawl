@@ -12,12 +12,56 @@ export default {
 	theme: {
 		container: {
 			center: true,
-			padding: '2rem',
+			padding: {
+				DEFAULT: '1rem',
+				sm: '2rem',
+				lg: '4rem',
+				xl: '5rem',
+				'2xl': '6rem'
+			},
 			screens: {
+				sm: '640px',
+				md: '768px',
+				lg: '1024px',
+				xl: '1280px',
 				'2xl': '1400px'
 			}
 		},
+		screens: {
+			'xs': '475px',
+			'sm': '640px',
+			'md': '768px',
+			'lg': '1024px',
+			'xl': '1280px',
+			'2xl': '1536px',
+			// Game-specific breakpoints
+			'mobile': {'max': '767px'},
+			'tablet': {'min': '768px', 'max': '1023px'},
+			'desktop': {'min': '1024px'}
+		},
 		extend: {
+			spacing: {
+				// Mobile-friendly spacings
+				'safe-top': 'env(safe-area-inset-top)',
+				'safe-bottom': 'env(safe-area-inset-bottom)',
+				'safe-left': 'env(safe-area-inset-left)',
+				'safe-right': 'env(safe-area-inset-right)',
+			},
+			fontSize: {
+				// Mobile-optimized text sizes
+				'xs-mobile': ['0.625rem', { lineHeight: '0.875rem' }],
+				'sm-mobile': ['0.75rem', { lineHeight: '1rem' }],
+				'base-mobile': ['0.875rem', { lineHeight: '1.25rem' }],
+				'lg-mobile': ['1rem', { lineHeight: '1.5rem' }],
+				'xl-mobile': ['1.125rem', { lineHeight: '1.75rem' }],
+			},
+			minHeight: {
+				'screen-mobile': ['100vh', '100dvh'],
+			},
+			maxWidth: {
+				'mobile': '100vw',
+				'canvas-mobile': 'min(100vw - 2rem, 100vh - 8rem)',
+			},
 			colors: {
 				border: 'rgb(var(--border))',
 				input: 'rgb(var(--input))',

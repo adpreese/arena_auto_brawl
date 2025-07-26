@@ -58,6 +58,24 @@
     --hp-low: 255 0 0;
     --ui-panel: 23 26 32;
     --ui-border: 76 38 115;
+    
+    /* Mobile-responsive sizing */
+    --arena-size-desktop: 600px;
+    --arena-size-tablet: 500px;
+    --arena-size-mobile: min(100vw - 1rem, 100vh - 14rem);
+    --character-size-desktop: 40px;
+    --character-size-tablet: 35px;
+    --character-size-mobile: 30px;
+    
+    /* Touch-friendly sizing */
+    --touch-target-min: 44px;
+    --touch-padding: 12px;
+    
+    /* Mobile typography */
+    --text-xs-mobile: 0.625rem;
+    --text-sm-mobile: 0.75rem;
+    --text-base-mobile: 0.875rem;
+    --text-lg-mobile: 1rem;
 
     /* Gradients */
     --gradient-arena: linear-gradient(135deg, rgb(255, 255, 255), rgb(23, 26, 32));
@@ -135,5 +153,69 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Mobile-first responsive utilities */
+  .arena-size {
+    width: var(--arena-size-mobile);
+    height: var(--arena-size-mobile);
+  }
+  
+  @media (min-width: 768px) {
+    .arena-size {
+      width: var(--arena-size-tablet);
+      height: var(--arena-size-tablet);
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .arena-size {
+      width: var(--arena-size-desktop);
+      height: var(--arena-size-desktop);
+    }
+  }
+  
+  /* Touch-friendly utilities */
+  .touch-target {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    padding: var(--touch-padding);
+  }
+  
+  /* Mobile layout utilities */
+  .mobile-stack {
+    @apply flex flex-col;
+  }
+  
+  @media (min-width: 1024px) {
+    .mobile-stack {
+      @apply flex-row;
+    }
+  }
+  
+  /* Safe area utilities */
+  .safe-area-inset {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  
+  /* Mobile overlay utilities */
+  .mobile-overlay {
+    @apply fixed inset-0 z-50 bg-background/95;
+    @apply flex flex-col;
+    @apply overflow-y-auto;
+    @apply p-4;
+  }
+  
+  @media (min-width: 768px) {
+    .mobile-overlay {
+      @apply absolute;
+      @apply p-8;
+      @apply rounded-lg;
+    }
   }
 }

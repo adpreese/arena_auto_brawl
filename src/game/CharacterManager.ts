@@ -1,7 +1,7 @@
 // Character Management System
 import { Character, Stats, Vec2 } from './types';
 import { GAME_CONFIG } from './config';
-import { randomStat, randomEmoji, randomColor, generateUniqueId, getRandomPosition, randomPlanetaryHouse, randomAttackEffect, createRandomStats } from './utils';
+import { randomEmoji, randomColor, generateUniqueId, getRandomPosition, randomPlanetaryHouse, randomAttackEffect, createRandomStats } from './utils';
 
 export class CharacterManager {
   private characters: Map<string, Character> = new Map();
@@ -11,25 +11,29 @@ export class CharacterManager {
   generateCandidates(count: number = 3): Character[] {
     const candidates: Character[] = [];
     
-    for (let i = 0; i < count; i++) {
-      const stats = createRandomStats();
+    // Use fixed starter characters from config
+    const starterTemplates = GAME_CONFIG.STARTER_CHARACTERS;
+    
+    for (let i = 0; i < Math.min(count, starterTemplates.length); i++) {
+      const template = starterTemplates[i];
       
       const candidate: Character = {
         id: generateUniqueId(),
-        stats,
-        currentHP: stats.hp,
+        name: template.name,
+        stats: { ...template.stats },
+        currentHP: template.stats.hp,
         position: { x: 0, y: 0 },
         velocity: { x: 0, y: 0 },
         currentTargetId: null,
         lastAttackTime: 0,
-        emoji: randomEmoji(),
-        color: randomColor(),
+        emoji: template.emoji,
+        color: template.color,
         isPlayer: false,
         isDead: false,
         lastDirectionChange: 0,
         randomDirection: Math.random() * Math.PI * 2,
-        planetaryHouse: randomPlanetaryHouse(),
-        equippedAttack: randomAttackEffect(),
+        planetaryHouse: template.planetaryHouse,
+        equippedAttack: { ...template.attackEffect },
         inventory: []
       };
       

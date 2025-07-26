@@ -88,7 +88,14 @@ export class CombatSystem {
           position: { ...target.position },
           attackEffect: attacker.equippedAttack,
           elementalModifier,
-          effectivenessType
+          effectivenessType,
+          // Additional data for damage indicators
+          damageIndicator: {
+            damage,
+            elementalModifier,
+            effectivenessType,
+            attackElement: attacker.equippedAttack.element
+          }
         }
       });
     }

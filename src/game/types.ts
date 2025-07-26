@@ -81,6 +81,7 @@ export interface StatChip extends Item {
 
 export interface Character {
   id: string;
+  name?: string; // Optional name for fixed characters
   stats: Stats;
   currentHP: number;
   position: Vec2;
@@ -113,6 +114,19 @@ export interface Particle {
   color: string;
   type: 'hit' | 'death' | 'death_icon';
   hasGoldOutline?: boolean; // For super effective attacks
+}
+
+export interface DamageIndicator {
+  id: string;
+  position: Vec2;
+  velocity: Vec2;
+  damage: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  fontSize: number;
+  isBold: boolean;
+  effectivenessType: 'super-effective' | 'not-very-effective' | 'regular-attack';
 }
 
 export interface AOEIndicator {
@@ -185,19 +199,8 @@ export interface LeaderboardEntry {
   roundResults: RoundResult[];
 }
 
-// Zone constriction system
-export interface ZoneState {
-  isActive: boolean;
-  radius: number;
-  centerX: number;
-  centerY: number;
-  startTime: number;
-  duration: number; // Total time for full constriction
-  initialRadius: number;
-  minRadius: number;
-}
 
-export type GameEventType = 'character_died' | 'combat_hit' | 'game_over' | 'aoe_attack' | 'item_used' | 'character_evolved' | 'zone_spawned' | 'player_kill';
+export type GameEventType = 'character_died' | 'combat_hit' | 'game_over' | 'aoe_attack' | 'item_used' | 'character_evolved' | 'player_kill' | 'timer_warning' | 'timer_expired' | 'overtime_damage';
 
 export interface GameEvent {
   type: GameEventType;

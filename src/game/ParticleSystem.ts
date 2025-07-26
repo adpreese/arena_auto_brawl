@@ -252,7 +252,7 @@ export class ParticleSystem {
     }
   }
   
-  render(ctx: CanvasRenderingContext2D): void {
+  render(ctx: CanvasRenderingContext2D, scaleFactor: number = 1): void {
     ctx.save();
     
     for (const particle of this.particles.values()) {
@@ -260,32 +260,19 @@ export class ParticleSystem {
       const alpha = lifeRatio;
       
       if (particle.type === 'death_icon') {
-        // // Draw death icon (skull emoji)
-        // ctx.save();
-        // ctx.globalAlpha = alpha;
-        // ctx.font = `${particle.size}px Arial`;
-        // ctx.textAlign = 'center';
-        // ctx.textBaseline = 'middle';
-        
-        // // Add shadow/outline for better visibility
-        // ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-        // ctx.lineWidth = 2;
-        // ctx.strokeText('💀', particle.position.x, particle.position.y);
-        
-        // // Draw the skull emoji
-        // ctx.fillStyle = `rgba(${particle.color}, ${alpha})`;
-        // ctx.fillText('💀', particle.position.x, particle.position.y);
-        // ctx.restore();
+        // Death icon rendering is disabled
       } else {
-        // Regular particle rendering
-        const size = particle.size * (0.5 + lifeRatio * 0.5);
+        // Regular particle rendering with scaling
+        const size = particle.size * (0.5 + lifeRatio * 0.5) * scaleFactor;
+        const scaledX = particle.position.x * scaleFactor;
+        const scaledY = particle.position.y * scaleFactor;
         
         // Draw gold outline for super effective attacks
         if (particle.hasGoldOutline) {
           ctx.strokeStyle = `rgba(255, 215, 0, ${alpha * 0.8})`; // Gold color
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 2 * scaleFactor;
           ctx.beginPath();
-          ctx.arc(particle.position.x, particle.position.y, size + 2, 0, Math.PI * 2);
+          ctx.arc(scaledX, scaledY, size + (2 * scaleFactor), 0, Math.PI * 2);
           ctx.stroke();
         }
         
@@ -294,7 +281,7 @@ export class ParticleSystem {
         
         // Draw particle
         ctx.beginPath();
-        ctx.arc(particle.position.x, particle.position.y, size, 0, Math.PI * 2);
+        ctx.arc(scaledX, scaledY, size, 0, Math.PI * 2);
         ctx.fill();
         
         // Add glow effect for death particles
@@ -304,7 +291,7 @@ export class ParticleSystem {
           ctx.shadowBlur = size * 2;
           ctx.globalAlpha = alpha * 0.5;
           ctx.beginPath();
-          ctx.arc(particle.position.x, particle.position.y, size * 0.5, 0, Math.PI * 2);
+          ctx.arc(scaledX, scaledY, size * 0.5, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }

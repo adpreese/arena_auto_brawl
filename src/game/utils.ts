@@ -4,9 +4,6 @@ import { GAME_CONFIG } from './config';
 import { elementRegistry } from './ElementRegistry';
 import { characterRegistry } from './CharacterRegistry';
 
-export function randomStat(): number {
-  return Math.floor(Math.random() * 6); // 0-5 inclusive
-}
 
 export function randomEmoji(): string {
   return characterRegistry.getRandomEmoji();
@@ -73,14 +70,14 @@ export function isWithinAttackRange(attacker: Character, target: Character): boo
 export function calculateDamage(attacker: Character, defender: Character): number {
   // New damage formula: base × (1 + attackPower/10) × elementalModifier - defense
   const baseDamage = attacker.equippedAttack.baseDamage;
-  const attackPowerMultiplier = 1 + (attacker.stats.attackPower / 10);
+  const attackPowerMultiplier = 1 + (attacker.stats.attackPower / 100);
   const elementalModifier = elementRegistry.calculateElementalModifier(
     attacker.equippedAttack.element,
     attacker.stats.element,
     defender.stats.element
   );
   
-  const rawDamage = Math.floor(baseDamage * attackPowerMultiplier * elementalModifier) - defender.stats.defense;
+  const rawDamage = Math.floor(baseDamage * attackPowerMultiplier * elementalModifier * ((Math.log(defender.stats.defense) / Math.log(attacker.stats.attackPower))*0.9));
   return Math.max(1, rawDamage); // Minimum 1 damage
 }
 
@@ -107,76 +104,6 @@ export function resolveCollision(char1: Character, char2: Character): void {
   }
 }
 
-export function generateLevelUpOptions(): LevelUpOption[] {
-  const options: LevelUpOption[] = [
-    {
-      id: 'berserker',
-      name: 'Berserker',
-      description: 'Unleash your fury',
-      statBonus: {
-        hp: Math.floor(Math.random() * 6), // 0-5
-        defense: Math.floor(Math.random() * 4), // 0-3
-        attackPower: Math.floor(Math.random() * 4), // 0-3
-        speed: Math.floor(Math.random() * 4) // 0-3
-      }
-    },
-    {
-      id: 'guardian',
-      name: 'Guardian',
-      description: 'Defend and endure',
-      statBonus: {
-        hp: Math.floor(Math.random() * 6), // 0-5
-        defense: Math.floor(Math.random() * 4), // 0-3
-        attackPower: Math.floor(Math.random() * 4), // 0-3
-        speed: Math.floor(Math.random() * 4) // 0-3
-      }
-    },
-    {
-      id: 'survivor',
-      name: 'Survivor',
-      description: 'Built to last',
-      statBonus: {
-        hp: Math.floor(Math.random() * 6), // 0-5
-        defense: Math.floor(Math.random() * 4), // 0-3
-        attackPower: Math.floor(Math.random() * 4), // 0-3
-        speed: Math.floor(Math.random() * 4) // 0-3
-      }
-    }
-  ];
-  
-  return options;
-}
-
-export function applyLevelUpOption(character: Character, option: LevelUpOption): Character {
-  const updatedCharacter = { ...character };
-  
-  // Initialize base stats if not present
-  if (!updatedCharacter.baseStats) {
-    updatedCharacter.baseStats = { ...character.stats };
-  }
-  
-  // Initialize level if not present
-  if (!updatedCharacter.level) {
-    updatedCharacter.level = 1;
-  }
-  
-  // Apply stat bonuses
-  updatedCharacter.stats = {
-    ...updatedCharacter.stats,
-    hp: updatedCharacter.stats.hp + option.statBonus.hp,
-    defense: updatedCharacter.stats.defense + option.statBonus.defense,
-    attackPower: updatedCharacter.stats.attackPower + option.statBonus.attackPower,
-    speed: updatedCharacter.stats.speed + option.statBonus.speed
-  };
-  
-  // Level up
-  updatedCharacter.level++;
-  
-  // Restore to full HP
-  updatedCharacter.currentHP = updatedCharacter.stats.hp;
-  
-  return updatedCharacter;
-}
 
 export function randomPlanetaryHouse(): PlanetaryHouse {
   return characterRegistry.getRandomPlanetaryHouse() as PlanetaryHouse;
@@ -190,92 +117,8 @@ export function getPlanetaryHouseColor(house: PlanetaryHouse): string {
   return characterRegistry.getPlanetaryHouseColor(house);
 }
 
-export function getAttackEffects(): AttackEffect[] {
-  return [
-    {
-      id: 'fireball',
-      name: 'Fireball',
-      icon: '🔥',
-      baseDamage: 3,
-      cooldown: 667, // ~1.5 attacks per second
-      element: 'Fire',
-      aoeShape: 'circle',
-      aoeSize: 60,
-      particleColor: '255, 69, 0',
-      particleEffect: 'explosion'
-    },
-    {
-      id: 'lightning_bolt',
-      name: 'Lightning Bolt',
-      icon: '⚡',
-      baseDamage: 2,
-      cooldown: 500, // 2 attacks per second
-      element: 'Electric',
-      aoeShape: 'line',
-      aoeSize: 120, // length
-      aoeWidth: 20, // width
-      particleColor: '255, 255, 0',
-      particleEffect: 'spark'
-    },
-    {
-      id: 'ice_shard',
-      name: 'Ice Shard',
-      icon: '❄️',
-      baseDamage: 4,
-      cooldown: 833, // ~1.2 attacks per second
-      element: 'Ice',
-      aoeShape: 'cone',
-      aoeSize: 80, // range
-      aoeAngle: 45, // 45 degree cone
-      particleColor: '173, 216, 230',
-      particleEffect: 'crystals'
-    },
-    {
-      id: 'water_wave',
-      name: 'Water Wave',
-      icon: '💧',
-      baseDamage: 2,
-      cooldown: 1250, // 0.8 attacks per second
-      element: 'Water',
-      aoeShape: 'arc',
-      aoeSize: 90,
-      aoeAngle: 120, // 120 degree arc
-      particleColor: '50, 205, 50',
-      particleEffect: 'splash'
-    },
-    {
-      id: 'earth_spikes',
-      name: 'Earth Spikes',
-      icon: '🌍',
-      baseDamage: 3,
-      cooldown: 600, // ~1.7 attacks per second
-      element: 'Earth',
-      aoeShape: 'rectangle',
-      aoeSize: 70, // length
-      aoeWidth: 30, // width
-      particleColor: '139, 69, 19',
-      particleEffect: 'crystals'
-    },
-    {
-      id: 'air_slash',
-      name: 'Air Slash',
-      icon: '💨',
-      baseDamage: 2,
-      cooldown: 400, // 2.5 attacks per second
-      element: 'Air',
-      aoeShape: 'line',
-      aoeSize: 100,
-      aoeWidth: 15,
-      particleColor: '135, 206, 235',
-      particleEffect: 'wind'
-    }
-  ];
-}
-
-export function randomAttackEffect(): AttackEffect {
-  const attacks = getAttackEffects();
-  return attacks[Math.floor(Math.random() * attacks.length)];
-}
+// Import attack effects from centralized config
+export { getAttackEffects, randomAttackEffect, getAttackById } from './attacks';
 
 // Helper function to create random stats with the new system
 export function createRandomStats(): Stats {
