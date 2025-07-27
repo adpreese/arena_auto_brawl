@@ -294,3 +294,28 @@ export function upgradeEnemyCharacter(character: Character): Character {
   
   return upgradedCharacter;
 }
+
+export function createBossCharacter(): Character {
+  const baseStats = createRandomStats();
+  const bossStats = { ...baseStats, hp: baseStats.hp * 5 };
+  return {
+    id: generateUniqueId(),
+    stats: bossStats,
+    currentHP: bossStats.hp,
+    position: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    currentTargetId: null,
+    lastAttackTime: 0,
+    emoji: randomEmoji(),
+    color: randomColor(),
+    isPlayer: false,
+    isDead: false,
+    lastDirectionChange: 0,
+    randomDirection: Math.random() * Math.PI * 2,
+    level: 1,
+    baseStats: { ...bossStats },
+    planetaryHouse: randomPlanetaryHouse(),
+    equippedAttack: randomAttackEffect(),
+    inventory: []
+  };
+}

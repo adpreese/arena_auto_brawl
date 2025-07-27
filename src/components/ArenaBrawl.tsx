@@ -13,7 +13,7 @@ import { RoundTimerSystem, RoundTimerState } from '@/game/RoundTimerSystem';
 import { Character, GameResult, GameSession, RoundResult, LeaderboardEntry, ShopState, ShopCard } from '@/game/types';
 import { GAME_CONFIG } from '@/game/config';
 import { getLeaderboard, addLeaderboardEntry, isHighScore } from '@/lib/leaderboard';
-import { upgradeEnemyCharacter, randomPlanetaryHouse, getPlanetaryHouseSymbol, getPlanetaryHouseColor, randomAttackEffect, createRandomStats } from '@/game/utils';
+import { upgradeEnemyCharacter, randomPlanetaryHouse, getPlanetaryHouseSymbol, getPlanetaryHouseColor, randomAttackEffect, createRandomStats, createBossCharacter } from '@/game/utils';
 import { ShopSystem } from '@/game/ShopSystem';
 import { InventorySystem } from '@/game/InventorySystem';
 import { elementRegistry } from '@/game/ElementRegistry';
@@ -37,7 +37,7 @@ const ArenaBrawl: React.FC = () => {
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [gameSession, setGameSession] = useState<GameSession>({
     currentRound: 1,
-    totalRounds: 3,
+    totalRounds: GAME_CONFIG.TOTAL_ROUNDS,
     cumulativeScore: 0,
     gold: 0,
     roundResults: [],
@@ -457,22 +457,30 @@ const ArenaBrawl: React.FC = () => {
 
   const handleShopContinue = () => {
     if (gameSession.playerCharacter && gameSession.enemyCharacters) {
-      // Upgrade all enemy characters with random stats
-      const upgradedEnemies = gameSession.enemyCharacters.map(enemy => upgradeEnemyCharacter(enemy));
-      
-      setGameSession(prev => ({ 
-        ...prev, 
-        currentRound: prev.currentRound + 1,
-        enemyCharacters: upgradedEnemies
+      const nextRound = gameSession.currentRound + 1;
+      let enemies: Character[];
+
+      if (nextRound === GAME_CONFIG.TOTAL_ROUNDS) {
+        // Final round - spawn a single boss
+        enemies = [createBossCharacter()];
+      } else {
+        // Upgrade existing enemies normally
+        enemies = gameSession.enemyCharacters.map(enemy => upgradeEnemyCharacter(enemy));
+      }
+
+      setGameSession(prev => ({
+        ...prev,
+        currentRound: nextRound,
+        enemyCharacters: enemies
       }));
       setGameResult(null);
       particleSystemRef.current.clear();
       damageIndicatorSystemRef.current.clear();
       roundTimerSystemRef.current.reset();
-      
-      
-      // Start the next round with upgraded characters
-      characterManagerRef.current.spawnCombatants(gameSession.playerCharacter, upgradedEnemies);
+
+
+      // Start the next round with upgraded characters or boss
+      characterManagerRef.current.spawnCombatants(gameSession.playerCharacter, enemies);
       setLivingCharacters(characterManagerRef.current.getLivingCharacters());
       roundTimerSystemRef.current.start();
       setGameState('PLAYING');
@@ -506,7 +514,7 @@ const ArenaBrawl: React.FC = () => {
   const handleNewGame = () => {
     setGameSession({
       currentRound: 1,
-      totalRounds: 3,
+      totalRounds: GAME_CONFIG.TOTAL_ROUNDS,
       cumulativeScore: 0,
       gold: 0,
       roundResults: [],

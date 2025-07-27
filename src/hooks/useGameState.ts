@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Character, GameResult, GameSession, RoundResult, LeaderboardEntry, ShopState, ZoneState } from '@/game/types';
 import { RoundTimerState } from '@/game/RoundTimerSystem';
+import { GAME_CONFIG } from '@/game/config';
 
 type GameState = 'CHAR_SELECT' | 'PLAYING' | 'ROUND_END' | 'GAME_OVER' | 'LEADERBOARD' | 'UPGRADE_PHASE';
 
@@ -43,7 +44,7 @@ export interface GameStateActions {
 
 const initialGameSession: GameSession = {
   currentRound: 1,
-  totalRounds: 3,
+  totalRounds: GAME_CONFIG.TOTAL_ROUNDS,
   cumulativeScore: 0,
   gold: 0,
   roundResults: [],
