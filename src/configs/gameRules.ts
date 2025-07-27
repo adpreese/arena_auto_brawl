@@ -11,7 +11,7 @@ export const GAME_RULES = {
   BASE_SPEED: 60,
   
   // Game Progression
-  TOTAL_ROUNDS: 3,
+  TOTAL_ROUNDS: 4,
   
   // Pool Sizes
   PARTICLE_POOL_SIZE: 200,
