@@ -458,7 +458,8 @@ const ArenaBrawl: React.FC = () => {
   const handleShopContinue = () => {
     if (gameSession.playerCharacter && gameSession.enemyCharacters) {
       // Upgrade all enemy characters with random stats
-      const upgradedEnemies = gameSession.enemyCharacters.map(enemy => upgradeEnemyCharacter(enemy));
+      const nextRound = gameSession.currentRound + 1;
+      const upgradedEnemies = gameSession.enemyCharacters.map(enemy => upgradeEnemyCharacter(enemy, nextRound));
       
       setGameSession(prev => ({ 
         ...prev, 

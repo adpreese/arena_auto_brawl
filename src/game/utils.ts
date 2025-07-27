@@ -251,7 +251,7 @@ export function isInAttackAOE(targetPos: Vec2, attackerPos: Vec2, attackDirectio
   }
 }
 
-export function upgradeEnemyCharacter(character: Character): Character {
+export function upgradeEnemyCharacter(character: Character, round: number = 1): Character {
   const upgradedCharacter = { ...character };
   
   // Initialize base stats if not present
@@ -271,13 +271,17 @@ export function upgradeEnemyCharacter(character: Character): Character {
     attackPower: Math.floor(Math.random() * 4), // 0-3
     speed: Math.floor(Math.random() * 4) // 0-3
   };
+
+  // Scaling factor makes later rounds 10-30% stronger than the previous
+  const roundsAhead = Math.max(round - (upgradedCharacter.level ?? 1), 1);
+  const scalingFactor = 1 + (0.1 + Math.random() * 0.2) * roundsAhead;
   
-  // Apply random upgrades
+  // Apply random upgrades and round-based scaling
   upgradedCharacter.stats = {
     ...upgradedCharacter.stats,
-    hp: upgradedCharacter.stats.hp + statUpgrades.hp,
+    hp: Math.round((upgradedCharacter.stats.hp + statUpgrades.hp) * scalingFactor),
     defense: upgradedCharacter.stats.defense + statUpgrades.defense,
-    attackPower: upgradedCharacter.stats.attackPower + statUpgrades.attackPower,
+    attackPower: Math.round((upgradedCharacter.stats.attackPower + statUpgrades.attackPower) * scalingFactor),
     speed: upgradedCharacter.stats.speed + statUpgrades.speed
   };
   
