@@ -861,7 +861,6 @@ const ArenaBrawl: React.FC = () => {
                 <div className={`space-y-2 mb-6 ${isMobile ? 'text-base' : 'text-lg'}`}>
                   <div>Round {gameSession.currentRound} of {gameSession.totalRounds}</div>
                   <div>Place: <span className="text-primary font-bold">#{gameResult.place}</span></div>
-                  <div>Score: <span className="text-neon-cyan font-bold">{gameResult.score}</span></div>
                   <div className="text-xl font-bold text-neon-yellow mt-4">
                     Total Score: {gameSession.cumulativeScore}
                   </div>
